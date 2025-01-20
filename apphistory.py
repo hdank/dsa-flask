@@ -1,3 +1,4 @@
+import time
 from flask import Flask, request, Response, stream_with_context, jsonify, json
 from langchain_community.llms import Ollama
 from langchain_community.vectorstores import Chroma
@@ -14,7 +15,7 @@ from langchain.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableBranch
 from langchain_core.output_parsers import StrOutputParser
 from ollama import chat
-import requests
+import os, logging, requests, click, shutil, uuid
 
 app = Flask(__name__)
 
@@ -50,7 +51,7 @@ def retrieve_context(query):
 def rag_streaming_response(query):
     context = retrieve_context(query)
 
-    augmented_prompt = f"You are a technical assistant good at searching documents and i will give you the context, answer the question from Input. If you do not have an answer from the provided information say so. Context: {context}. Input {query}"
+    augmented_prompt = f"You are a technical assistant good at searching documents and i will give you the Context, answer the question from Input. If the Context do not have an answer from the provided information say so. Context: {context}. Input: {query}"
 
     return augmented_prompt
 
@@ -82,16 +83,30 @@ def askPDFPost():
     query = json_content.get("query")
     print(f"query: {query}")
 
+    # Generate a conversation ID
+    conversation_id = str(uuid.uuid4())
+
     def generate_response():
+        # Send the conversation ID as the first message
+        initial_response = {
+            "conversation_id": conversation_id,
+            "type": "conversation_id"  # Add type to distinguish from answer chunks
+        }
+        yield f"data: {json.dumps(initial_response)}\n\n"
+
+        # Then send the regular streaming response
         stream = chat(
             model='llama3.2',
             messages=[{'role': 'user', 'content': f'{rag_streaming_response(query)}'}],
             stream=True,
         )
         for chunk in stream:
-            response_answer = {"answer": chunk['message']['content']}
+            response_answer = {
+                "answer": chunk['message']['content'],
+                "type": "content"  # Add type to distinguish from conversation_id
+            }
             print(chunk['message']['content'], end='', flush=True)
-            yield f"data: {response_answer}\n\n"  # Format for Server-Sent Events
+            yield f"data: {json.dumps(response_answer)}\n\n"
 
     return Response(generate_response(), content_type='text/event-stream')
 
@@ -111,22 +126,62 @@ def pdfPost():
     print(f"chunks len={len(chunks)}")
 
     vector_store = Chroma.from_documents(
-        documents=chunks, embedding=embedding, persist_directory=folder_path
+        documents=chunks, 
+        embedding=embedding, 
+        persist_directory=folder_path
     )
-
     vector_store.persist()
+
+    # Get the ID of the first chunk which we'll use as document ID
+    collection = vector_store._collection
+    ids = collection.get()['ids']
+    document_id = ids[0] if ids else None  # Get first ID
 
     response = {
         "status": "Successfully Uploaded",
         "filename": file_name,
         "doc_len": len(docs),
         "chunks": len(chunks),
+        "document_id": document_id  # Return the Chroma-generated ID
     }
     return response
+@app.route("/delete-pdf", methods=["DELETE"])
+def delete_pdf():
+    try:
+        json_content = request.json
+        file_name = json_content.get("file_name")
+        document_id = json_content.get("document_id")
 
+        # Initialize the vector store
+        vector_store = Chroma(
+            persist_directory=folder_path,
+            embedding_function=embedding
+        )
+
+        # Delete the document and its chunks from vector store
+        vector_store._collection.delete(ids=[document_id])
+        vector_store.persist()
+
+        # Delete the PDF file if it exists
+        save_file = "pdf/" + file_name +".pdf"
+        if os.path.exists(save_file):
+            os.remove(save_file)
+            print(f"Deleted PDF file: {save_file}")
+
+        return {
+            "status": 200,
+            "message": f"Successfully deleted document {document_id} and file {file_name}"
+        }
+        
+    except Exception as e:
+        return {
+            "status": 500,
+            "error": f"Error deleting document: {str(e)}"
+        }, 500
+    
+    
 def start_app():
     app.run(host="0.0.0.0", port=5000, debug=True)
-
-
+    
 if __name__ == "__main__":
     start_app()
