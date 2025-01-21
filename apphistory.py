@@ -15,7 +15,7 @@ from langchain.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableBranch
 from langchain_core.output_parsers import StrOutputParser
 from ollama import chat
-import os, logging, requests, click, shutil, uuid
+import os, logging, requests, click, shutil, uuid, base64
 
 app = Flask(__name__)
 
@@ -24,6 +24,8 @@ chat_history = []
 folder_path = "db"
 
 cached_llm = Ollama(model="llama3.2")
+
+vision_llm = Ollama(model="llava:7b")
 
 embedding = FastEmbedEmbeddings()
 
@@ -75,6 +77,40 @@ def aiPost():
             yield f"data: {response_answer}\n\n"  # Format for Server-Sent Events
 
     return Response(generate_response(), content_type='text/event-stream')
+
+@app.route("/ask_image", methods=["POST"])
+def askImage():
+    print("POST /ask_image called")
+    
+    # Check if the image file is in the request
+    if 'image' not in request.files:
+        return jsonify({"error": "No image file provided"}), 400
+    
+    image_file = request.files['image']
+    
+    # Check if the query is in the request
+    if 'query' not in request.form:
+        return jsonify({"error": "No query provided"}), 400
+    
+    query = request.form['query']
+
+    # Read the image file and convert it to base64
+    image_data = image_file.read()
+    image_base64 = base64.b64encode(image_data).decode('utf-8')
+
+    messages = [
+        {'role': 'user',
+         'content': query,
+         'images': [image_base64]  # Pass the base64-encoded image
+        }
+    ]
+    
+    # Assuming chat is a function that processes the messages
+    model_name = "llava:7b"  # Ensure this is a string
+    res = chat(model=model_name, messages=messages)
+    print(res['message']['content'])
+    return jsonify({"response": res['message']['content']})
+
 
 @app.route("/ask_pdf", methods=["POST"])
 def askPDFPost():
@@ -145,6 +181,7 @@ def pdfPost():
         "document_id": document_id  # Return the Chroma-generated ID
     }
     return response
+
 @app.route("/delete-pdf", methods=["DELETE"])
 def delete_pdf():
     try:
