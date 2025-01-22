@@ -101,12 +101,11 @@ def askImage():
     messages = [
         {'role': 'user',
          'content': query,
-         'images': [image_base64]  # Pass the base64-encoded image
+         'images': [image_base64] 
         }
     ]
     
-    # Assuming chat is a function that processes the messages
-    model_name = "llava:7b"  # Ensure this is a string
+    model_name = "llava:7b" 
     res = chat(model=model_name, messages=messages)
     print(res['message']['content'])
     return jsonify({"response": res['message']['content']})
@@ -115,8 +114,20 @@ def askImage():
 @app.route("/ask_pdf", methods=["POST"])
 def askPDFPost():
     print("Post /ask_pdf called")
-    json_content = request.json
-    query = json_content.get("query")
+
+    query = request.form['query']
+    image_file = request.files['image']
+    # Read the image file and convert it to base64
+    image_data = image_file.read()
+    image_base64 = base64.b64encode(image_data).decode('utf-8')
+    if image_base64:
+        messages=[{'role': 'user', 
+                       'content': f'{rag_streaming_response(query)}',
+                       'images': [image_base64]}]
+    else:
+        messages=[{'role': 'user', 
+                       'content': f'{rag_streaming_response(query)}'
+                 }]
     print(f"query: {query}")
 
     # Generate a conversation ID
@@ -132,8 +143,8 @@ def askPDFPost():
 
         # Then send the regular streaming response
         stream = chat(
-            model='llama3.2',
-            messages=[{'role': 'user', 'content': f'{rag_streaming_response(query)}'}],
+            model='llava:7b',
+            messages=messages,
             stream=True,
         )
         for chunk in stream:
