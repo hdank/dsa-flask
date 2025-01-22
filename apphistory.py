@@ -19,13 +19,13 @@ import os, logging, requests, click, shutil, uuid, base64
 
 app = Flask(__name__)
 
-chat_history = []
+# Global dictionary to store conversation histories and their last activity timestamp
+conversation_histories = {}
+conversation_metadata = {}
 
 folder_path = "db"
 
-cached_llm = Ollama(model="llama3.2")
-
-vision_llm = Ollama(model="llava:7b")
+cached_llm = Ollama(model="llava:7b")
 
 embedding = FastEmbedEmbeddings()
 
@@ -50,12 +50,55 @@ def retrieve_context(query):
         print("No relevant context found.")
     return "\n".join([doc.page_content for doc in docs])
 
-def rag_streaming_response(query):
-    context = retrieve_context(query)
+def rag_streaming_response(query, conversation_history=None):
+    if conversation_history:
+        formatted_history = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in conversation_history])
+        context = retrieve_context(f"{formatted_history}\nUser: {query}")
+    else:
+        context = retrieve_context(query)
 
     augmented_prompt = f"You are a technical assistant good at searching documents and i will give you the Context, answer the question from Input. If the Context do not have an answer from the provided information say so. Context: {context}. Input: {query}"
 
     return augmented_prompt
+
+def manage_conversation(conversation_id=None):
+    """
+    Manages conversation lifecycle. Returns appropriate conversation_id.
+    Creates new conversation only when needed.
+    """
+    current_time = time.time()
+    
+    # If conversation_id is provided, check if it exists and is still valid
+    if conversation_id:
+        if conversation_id in conversation_metadata:
+            # Update last activity timestamp
+            conversation_metadata[conversation_id]['last_activity'] = current_time
+            return conversation_id
+        else:
+            # If the ID doesn't exist, we'll create a new one
+            print(f"Conversation {conversation_id} not found, creating new conversation")
+    
+    # Create new conversation
+    new_conversation_id = str(uuid.uuid4())
+    conversation_histories[new_conversation_id] = []
+    conversation_metadata[new_conversation_id] = {
+        'created_at': current_time,
+        'last_activity': current_time
+    }
+    return new_conversation_id
+
+def cleanup_old_conversations():
+    """
+    Removes conversations that have been inactive for more than 24 hours
+    """
+    current_time = time.time()
+    timeout = 24 * 3600  # 24 hours in seconds
+    
+    for conv_id in list(conversation_metadata.keys()):
+        if current_time - conversation_metadata[conv_id]['last_activity'] > timeout:
+            del conversation_histories[conv_id]
+            del conversation_metadata[conv_id]
+            print(f"Cleaned up inactive conversation: {conv_id}")
 
 @app.route("/ai", methods=["POST"])
 def aiPost():
@@ -111,51 +154,114 @@ def askImage():
     return jsonify({"response": res['message']['content']})
 
 
+
 @app.route("/ask_pdf", methods=["POST"])
 def askPDFPost():
     print("Post /ask_pdf called")
 
     query = request.form['query']
-    image_file = request.files['image']
-    # Read the image file and convert it to base64
-    image_data = image_file.read()
-    image_base64 = base64.b64encode(image_data).decode('utf-8')
-    if image_base64:
-        messages=[{'role': 'user', 
-                       'content': f'{rag_streaming_response(query)}',
-                       'images': [image_base64]}]
-    else:
-        messages=[{'role': 'user', 
-                       'content': f'{rag_streaming_response(query)}'
-                 }]
-    print(f"query: {query}")
+    image_file = request.files.get('image')
+    conversation_id = request.form.get('conversation_id')
 
-    # Generate a conversation ID
-    conversation_id = str(uuid.uuid4())
+    # Handle image data
+    image_base64 = None
+    if image_file:
+        image_data = image_file.read()
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+    
+    # Manage conversation lifecycle
+    conversation_id = manage_conversation(conversation_id)
+    print(f"Using conversation ID: {conversation_id}")
+
+    # Periodically cleanup old conversations
+    cleanup_old_conversations()
 
     def generate_response():
-        # Send the conversation ID as the first message
-        initial_response = {
-            "conversation_id": conversation_id,
-            "type": "conversation_id"  # Add type to distinguish from answer chunks
-        }
-        yield f"data: {json.dumps(initial_response)}\n\n"
+        try:
+            # Get current conversation history
+            current_history = conversation_histories[conversation_id]
+            
+            # Get RAG context with conversation history
+            context = rag_streaming_response(query, current_history)
+            
+            # Prepare the full message for the model
+            user_message = f'{query}\nContext: {context}'
+            
+            # Update history with user message
+            current_history.append({
+                'role': 'user',
+                'content': user_message
+            })
+            
+            # Keep only last 10 messages
+            conversation_histories[conversation_id] = current_history[-10:]
+            
+            # Prepare messages for the model including history
+            messages_for_model = []
+            for msg in current_history:
+                messages_for_model.append({
+                    'role': msg['role'],
+                    'content': msg['content'],
+                    'images': [image_base64] if msg['role'] == 'user' and image_base64 else None
+                })
 
-        # Then send the regular streaming response
-        stream = chat(
-            model='llava:7b',
-            messages=messages,
-            stream=True,
-        )
-        for chunk in stream:
-            response_answer = {
-                "answer": chunk['message']['content'],
-                "type": "content"  # Add type to distinguish from conversation_id
+            # Stream response from LLM
+            stream = chat(
+                model='llava:7b',
+                messages=messages_for_model,
+                stream=True,
+            )
+            
+            # Collect full response for history
+            full_response = []
+            for chunk in stream:
+                content = chunk['message']['content']
+                full_response.append(content)
+                response_chunk = {
+                    'answer': content, 
+                    'conversation_id': conversation_id,
+                    'is_new_conversation': len(current_history) <= 1
+                }
+                yield f"data: {json.dumps(response_chunk)}\n\n"
+            
+            # Update history with assistant's complete response
+            complete_response = ''.join(full_response)
+            current_history.append({
+                'role': 'assistant',
+                'content': complete_response
+            })
+            
+            # Keep only last 10 messages after adding assistant response
+            conversation_histories[conversation_id] = current_history[-10:]
+            
+        except Exception as e:
+            error_response = {
+                'error': str(e), 
+                'conversation_id': conversation_id,
+                'is_new_conversation': len(current_history) <= 1
             }
-            print(chunk['message']['content'], end='', flush=True)
-            yield f"data: {json.dumps(response_answer)}\n\n"
+            yield f"data: {json.dumps(error_response)}\n\n"
 
     return Response(generate_response(), content_type='text/event-stream')
+
+# Add an endpoint to start a new conversation explicitly
+@app.route("/new_conversation", methods=["POST"])
+def start_new_conversation():
+    conversation_id = manage_conversation(None)  # Force new conversation
+    return jsonify({
+        "status": "success",
+        "conversation_id": conversation_id,
+        "message": "New conversation started"
+    })
+
+# Add a new endpoint to retrieve conversation history
+@app.route("/conversation_history/<conversation_id>", methods=["GET"])
+def get_conversation_history(conversation_id):
+    history = conversation_histories.get(conversation_id, [])
+    return jsonify({
+        "conversation_id": conversation_id,
+        "history": history
+    })
 
 @app.route("/pdf", methods=["POST"])
 def pdfPost():
