@@ -109,7 +109,7 @@ def pdf_post():
         "status": "Successfully Uploaded",
         "filename": file_name,
         "doc_len": len(docs),
-        "document_id": document_id  # Return the Chroma-generated ID
+        "document_id": document_id  # Return the auto-generated IDs
     }
     return response
 

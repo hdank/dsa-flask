@@ -31,7 +31,6 @@ def store_documents(docs):
     # Create unique IDs for each chunk that include the document ID
     chunk_ids = [f"{document_id}_chunk_{i}" for i in range(len(chunks))]
     
-    # Store with custom IDs and metadata
     vector_store = Chroma.from_documents(
         documents=chunks,
         embedding=embedding,
