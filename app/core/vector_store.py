@@ -1,7 +1,10 @@
+import uuid
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.core.config import DB_FOLDER, EMBEDDING_MODEL, CHUNK_SIZE, CHUNK_OVERLAP
+import chromadb
+from chromadb.utils import embedding_functions
 
 embedding = FastEmbedEmbeddings()
 text_splitter = RecursiveCharacterTextSplitter(
@@ -19,24 +22,34 @@ def retrieve_relevant_documents(query, vector_store, k=3):
     return "\n".join([doc.page_content for doc in docs])
     
 def store_documents(docs):
+    # Generate a unique document ID
+    document_id = str(uuid.uuid4())
+    
+    # Split documents into chunks
     chunks = text_splitter.split_documents(docs)
+    
+    # Create unique IDs for each chunk that include the document ID
+    chunk_ids = [f"{document_id}_chunk_{i}" for i in range(len(chunks))]
+    
+    # Store with custom IDs and metadata
     vector_store = Chroma.from_documents(
-        documents=chunks, 
-        embedding=embedding, 
-        persist_directory=DB_FOLDER
+        documents=chunks,
+        embedding=embedding,
+        persist_directory=DB_FOLDER,
+        ids=chunk_ids,
     )
     vector_store.persist()
     
-    # Get the ID of the first chunk which we'll use as document ID
-    collection = vector_store._collection
-    ids = collection.get()['ids']
-    document_id = ids[0] if ids else None  # Get first ID
-    return  document_id
+    return document_id  # Return the generated document ID
 
 def delete_document_by_id(document_id):
-     vector_store = Chroma(
-            persist_directory=DB_FOLDER,
-            embedding_function=embedding
-        )
-     vector_store._collection.delete(ids=[document_id])
-     vector_store.persist()
+    vector_store = Chroma(
+        persist_directory=DB_FOLDER,
+        embedding_function=embedding
+    )
+    
+    # Delete all chunks associated with this document ID
+    vector_store._collection.delete(
+        where={"document_id": document_id}
+    )
+    vector_store.persist()

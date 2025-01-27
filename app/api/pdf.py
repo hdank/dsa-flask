@@ -116,7 +116,7 @@ def pdf_post():
 def delete_pdf():
     try:
         json_content = request.json
-        file_name = json_content.get("file_name")
+        file_name = json_content.get("file_name")+".pdf"
         document_id = json_content.get("document_id")
 
         # Delete the document and its chunks from vector store

@@ -1,5 +1,5 @@
 import time, uuid
-from app.config import CONVERSATION_TIMEOUT
+from app.core.config import CONVERSATION_TIMEOUT
 
 # Global dictionary to store conversation histories and their last activity timestamp
 conversation_histories = {}
