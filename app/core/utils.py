@@ -1,48 +1,79 @@
-import time, uuid
+# utils.py
+import os
+import json
+import time
+import uuid
 from app.core.config import CONVERSATION_TIMEOUT
 
-# Global dictionary to store conversation histories and their last activity timestamp
-conversation_histories = {}
-conversation_metadata = {}
+def get_conversation_path(conversation_id):
+    """Get the file path for a conversation JSON file."""
+    return os.path.join('conversations', f'{conversation_id}.json')
+
+def load_conversation(conversation_id):
+    """Load conversation data from a JSON file."""
+    path = get_conversation_path(conversation_id)
+    if os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Error loading conversation {conversation_id}: {e}")
+            return None
+    return None
+
+def save_conversation(conversation_id, data):
+    """Save conversation data to a JSON file."""
+    path = get_conversation_path(conversation_id)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except IOError as e:
+        print(f"Error saving conversation {conversation_id}: {e}")
 
 def manage_conversation(conversation_id=None):
-    """
-    Manages conversation lifecycle. Returns appropriate conversation_id.
-    Creates new conversation only when needed.
-    """
+    """Manage conversation lifecycle using JSON files."""
     current_time = time.time()
     
-    # If conversation_id is provided, check if it exists and is still valid
     if conversation_id:
-        if conversation_id in conversation_metadata:
-            # Update last activity timestamp
-            conversation_metadata[conversation_id]['last_activity'] = current_time
+        data = load_conversation(conversation_id)
+        if data:
+            data['last_activity'] = current_time
+            save_conversation(conversation_id, data)
             return conversation_id
         else:
-            # If the ID doesn't exist, we'll create a new one
-            print(f"Conversation {conversation_id} not found, creating new conversation")
+            print(f"Conversation {conversation_id} not found, creating new.")
     
-    # Create new conversation
-    new_conversation_id = str(uuid.uuid4())
-    conversation_histories[new_conversation_id] = []
-    conversation_metadata[new_conversation_id] = {
+    new_conv_id = str(uuid.uuid4())
+    data = {
+        'history': [],
         'created_at': current_time,
         'last_activity': current_time
     }
-    return new_conversation_id
+    save_conversation(new_conv_id, data)
+    return new_conv_id
+
+def get_conversation_history(conversation_id):
+    """Retrieve conversation history from JSON file."""
+    data = load_conversation(conversation_id)
+    return data.get('history', []) if data else []
 
 def cleanup_old_conversations():
-    """
-    Removes conversations that have been inactive for more than 24 hours
-    """
+    """Delete conversations inactive beyond the timeout period."""
     current_time = time.time()
     timeout = CONVERSATION_TIMEOUT
     
-    for conv_id in list(conversation_metadata.keys()):
-        if current_time - conversation_metadata[conv_id]['last_activity'] > timeout:
-            del conversation_histories[conv_id]
-            del conversation_metadata[conv_id]
-            print(f"Cleaned up inactive conversation: {conv_id}")
-
-def get_conversation_history(conversation_id):
-     return conversation_histories.get(conversation_id, [])
+    os.makedirs('conversations', exist_ok=True)
+    
+    for filename in os.listdir('conversations'):
+        if filename.endswith('.json'):
+            conv_id = filename[:-5]
+            data = load_conversation(conv_id)
+            if not data:
+                continue
+            if current_time - data['last_activity'] > timeout:
+                try:
+                    os.remove(get_conversation_path(conv_id))
+                    print(f"Cleaned up inactive conversation: {conv_id}")
+                except OSError as e:
+                    print(f"Error deleting {conv_id}: {e}")

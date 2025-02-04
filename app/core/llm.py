@@ -12,6 +12,10 @@ def stream_llm_response(augmented_prompt):
         )
 
 def stream_chat_response(messages):
+    # Ensure messages is a list of dictionaries
+    if not isinstance(messages, list) or not all(isinstance(m, dict) for m in messages):
+        raise ValueError("messages must be a list of dictionaries")
+
     return chat(
         model=OLLAMA_MODEL,
         messages=messages,

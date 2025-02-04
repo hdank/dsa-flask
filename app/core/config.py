@@ -6,7 +6,7 @@ DB_FOLDER = os.path.join(BASE_DIR, "db")
 PDF_FOLDER = os.path.join(BASE_DIR, "pdf")
 
 # LLM Model
-OLLAMA_MODEL = "llava:7b"
+OLLAMA_MODEL = "llama3.2-vision"
 LLAMA_MODEL = "llama3.2"
 
 # Embedding Model
@@ -17,7 +17,7 @@ CHUNK_SIZE = 1024
 CHUNK_OVERLAP = 80
 
 # Conversation Management
-CONVERSATION_TIMEOUT = 24 * 3600  # 24 hours in seconds
+CONVERSATION_TIMEOUT = 30 * 86400  # 30 days
 
 # Prompt templates (optional, may also be placed in core/prompts.py)
 RAG_PROMPT = """

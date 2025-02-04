@@ -1,7 +1,7 @@
 from flask import request, Response, json
 from app.core.llm import stream_llm_response
 from app.core.vector_store import retrieve_relevant_documents, get_vector_store
-from app.core.utils import manage_conversation, cleanup_old_conversations, conversation_histories
+from app.core.utils import manage_conversation, cleanup_old_conversations
 from app.core.prompts import get_rag_prompt_template
 
 def rag_streaming_response(query, conversation_history=None):
