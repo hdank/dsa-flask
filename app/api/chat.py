@@ -11,8 +11,13 @@ def rag_streaming_response(query, conversation_history=None):
         context = retrieve_relevant_documents(f"{formatted_history}\nUser: {query}", vector_store)
     else:
         context = retrieve_relevant_documents(query, vector_store)
-        
-    augmented_prompt = f"You are a technical assistant good at searching documents and i will give you the Context, answer the question from Input. If the Context do not have an answer from the provided information say so. Context: {context}. Input: {query}"
+
+    context_str = "\n".join([f"Document: {doc_info['content']}\nMetadata: {doc_info['metadata']}\nScore: {doc_info['score']}" for doc_info in context])
+    if context is None:
+        return "No relevant context found for the given query."
+
+    augmented_prompt = f"You are a technical assistant good at searching documents. I will give you the Context and you can answer the question from Input. If the Context does not have an answer from the provided information, say so. If the question is not relevant to the Context, you just answer as usual.\n\nContext: {context_str}. Input: {query}"
+
     return augmented_prompt
 
 

@@ -1,7 +1,7 @@
 import time
 from flask import request, Response, jsonify, json
 from langchain_community.document_loaders import PDFPlumberLoader
-from app.core.vector_store import store_documents, delete_document_by_id
+from app.core.vector_store import store_documents, delete_document_by_id, retrieve_relevant_documents, get_vector_store
 from app.core.config import PDF_FOLDER
 import os, base64
 from app.core.llm import stream_chat_response
@@ -37,7 +37,6 @@ def ask_pdf_post():
             # Get the system prompt from RAG function
             system_prompt = rag_streaming_response(query, current_history)
             
-            # Build a single prompt string for llava:7b.
             # The prompt includes the system instructions, conversation history, and current query.
             prompt = f"### System:\n{system_prompt}\n\n"
             
@@ -64,15 +63,18 @@ def ask_pdf_post():
             
             messages_for_model = [{"role": "user", "content": prompt,'images': [image_base64] if image_base64 else None}]
             stream = stream_chat_response(messages_for_model)
-            
+            vector_store = get_vector_store()
+            docs = retrieve_relevant_documents(query, vector_store)
             full_response = []
             for chunk in stream:
                 content = chunk['message']['content']
                 full_response.append(content)
+
                 response_chunk = {
                     'answer': content, 
                     'conversation_id': conversation_id,
-                    'is_new_conversation': len(current_history) <= 1
+                    'is_new_conversation': len(current_history) <= 1,
+                    'docs': docs
                 }
                 response_string = json.dumps(response_chunk, ensure_ascii=False)
                 # Encode to bytes for Server-Sent Events
@@ -88,6 +90,7 @@ def ask_pdf_post():
             current_history.append({
                 'role': 'assistant',
                 'content': complete_response,
+                'docs': docs,
                 'created_at': time.time()
             })
             

@@ -16,10 +16,21 @@ def get_vector_store():
      return Chroma(persist_directory=DB_FOLDER, embedding_function=embedding)
      
 def retrieve_relevant_documents(query, vector_store, k=3):
-    docs = vector_store.similarity_search(query, k=k)
-    if not docs:
+    docs_and_scores = vector_store.similarity_search_with_score(query, k=k)
+    if not docs_and_scores:
         print("No relevant context found.")
-    return "\n".join([doc.page_content for doc in docs])
+        return []
+
+    docs = []
+    for doc, score in docs_and_scores:
+        doc_dict = {
+            'content': doc.page_content,
+            'metadata': doc.metadata,
+            'score': score
+        }
+        docs.append(doc_dict)
+
+    return docs
     
 def store_documents(docs):
     # Generate a unique document ID
