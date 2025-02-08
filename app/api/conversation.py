@@ -1,8 +1,10 @@
-from flask import jsonify
+from flask import jsonify, request
 from app.core.utils import manage_conversation, get_conversation_history
 
 def start_new_conversation():
-    conversation_id = manage_conversation(None)  # Force new conversation
+    json_content = request.json
+    user_id = json_content.get("user_id")
+    conversation_id = manage_conversation(None, user_id)  # Force new conversation
     return jsonify({
         "status": "success",
         "conversation_id": conversation_id,

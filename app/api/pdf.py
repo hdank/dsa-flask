@@ -9,7 +9,112 @@ from app.core.utils import manage_conversation, cleanup_old_conversations
 from app.api.chat import rag_streaming_response
 from app.core.utils import manage_conversation, cleanup_old_conversations, get_conversation_history, save_conversation
 
-def ask_pdf_post():
+
+def ask_llama():
+    print("Post /ask_llama called")
+    query = request.form['query']
+    conversation_id = request.form.get('conversation_id')
+    
+    # Manage conversation lifecycle
+    conversation_id = manage_conversation(conversation_id)
+    print(f"Using conversation ID: {conversation_id}")
+    
+    # Periodically cleanup old conversations
+    cleanup_old_conversations()
+    
+    def generate_response():
+        current_history = []
+        try:
+            # Get current conversation history
+            current_history = get_conversation_history(conversation_id)
+            
+            # Get the system prompt from RAG function
+            system_prompt = rag_streaming_response(query, current_history)
+            
+            # The prompt includes the system instructions, conversation history, and current query.
+            prompt = f"### System:\n{system_prompt}\n\n"
+            
+            # Append previous conversation history (if any)
+            for msg in current_history:
+                if msg['role'] == 'user':
+                    prompt += f"### User:\n{msg['content']}\n\n"
+                else:
+                    prompt += f"### Assistant:\n{msg['content']}\n\n"
+            
+            # Append the current query
+            prompt += f"### User:\n{query}\n\n### Assistant:\n"
+            
+            # Update history with the new user query (store only the query)
+            current_history.append({
+                'role': 'user',
+                'content': query,
+                'created_at': time.time()
+            })
+            save_conversation(conversation_id, {
+                'history': current_history,
+                'last_activity': time.time()
+            })
+            
+            messages_for_model = [{"role": "user", "content": prompt}]
+            stream = stream_chat_response(messages_for_model, "llama_vision")
+            vector_store = get_vector_store()
+            docs = retrieve_relevant_documents(query, vector_store)
+            full_response = []
+            for chunk in stream:
+                content = chunk['message']['content']
+                full_response.append(content)
+
+                response_chunk = {
+                    'answer': content, 
+                    'conversation_id': conversation_id,
+                    'is_new_conversation': len(current_history) <= 1,
+                    'docs': docs
+                }
+                response_string = json.dumps(response_chunk, ensure_ascii=False)
+                # Encode to bytes for Server-Sent Events
+                try:
+                    yield f"data: {response_string}\n\n".encode('utf-8')
+                except UnicodeEncodeError as e:
+                    print(f"Encoding error: {e}")
+                    error_response = {'error': f"UnicodeEncodeError: {str(e)}", 'conversation_id': conversation_id, 'is_new_conversation': len(current_history) <= 1}
+                    yield f"data: {json.dumps(error_response, ensure_ascii=False)}\n\n".encode('utf-8')
+            
+            # Combine all chunks into the final assistant response
+            complete_response = ''.join(full_response)
+            current_history.append({
+                'role': 'assistant',
+                'content': complete_response,
+                'docs': docs,
+                'created_at': time.time()
+            })
+            
+            # Save the updated conversation history
+            save_conversation(conversation_id, {
+                'history': current_history,
+                'last_activity': time.time()
+            })
+            
+        except Exception as e:
+            print(f"Error in generate_response: {str(e)}")
+            error_response = {
+                'error': str(e), 
+                'conversation_id': conversation_id,
+                'is_new_conversation': len(current_history) <= 1
+            }
+            try:
+                error_string = json.dumps(error_response, ensure_ascii=False)
+                yield f"data: {error_string}\n\n".encode('utf-8')
+            except UnicodeEncodeError as e:
+                print(f"Encoding error in error handling: {e}")
+                # If even the error message can't be encoded, provide a basic fallback
+                yield f"data: {json.dumps({'error': 'An unexpected error occurred.'})}\n\n".encode('utf-8')
+    
+    return Response(
+        generate_response(),
+        content_type='text/event-stream; charset=utf-8'
+    )
+
+def ask_llama_vision():
     print("Post /ask_pdf called")
     query = request.form['query']
     image_file = request.files.get('image')
@@ -62,7 +167,7 @@ def ask_pdf_post():
             })
             
             messages_for_model = [{"role": "user", "content": prompt,'images': [image_base64] if image_base64 else None}]
-            stream = stream_chat_response(messages_for_model)
+            stream = stream_chat_response(messages_for_model, "llama_vision")
             vector_store = get_vector_store()
             docs = retrieve_relevant_documents(query, vector_store)
             full_response = []

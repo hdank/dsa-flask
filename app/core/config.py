@@ -6,8 +6,8 @@ DB_FOLDER = os.path.join(BASE_DIR, "db")
 PDF_FOLDER = os.path.join(BASE_DIR, "pdf")
 
 # LLM Model
-OLLAMA_MODEL = "llama3.2-vision"
-LLAMA_MODEL = "llama3.2"
+LLAMA_VISION = "llama3.2-vision"
+LLAMA = "llama3.2"
 
 # Embedding Model
 EMBEDDING_MODEL = "fastembed"

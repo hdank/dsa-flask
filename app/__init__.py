@@ -12,14 +12,15 @@ def create_app():
     
     # Register blueprints for routes
     from app.api.chat import ai_post
-    from app.api.pdf import pdf_post, ask_pdf_post, delete_pdf
+    from app.api.pdf import pdf_post, ask_llama, ask_llama_vision, delete_pdf
     from app.api.image import ask_image_post
     from app.api.conversation import start_new_conversation, get_conversation_history_api
     
     # Add routes to the app
     app.add_url_rule("/ai", methods=["POST"], view_func=ai_post)
     app.add_url_rule("/pdf", methods=["POST"], view_func=pdf_post)
-    app.add_url_rule("/ask_pdf", methods=["POST"], view_func=ask_pdf_post)
+    app.add_url_rule("/ask_llama", methods=["POST"], view_func=ask_llama)
+    app.add_url_rule("/ask_llama_vision", methods=["POST"], view_func=ask_llama_vision)
     app.add_url_rule("/delete-pdf", methods=["DELETE"], view_func=delete_pdf)
     app.add_url_rule("/ask_image", methods=["POST"], view_func=ask_image_post)
     app.add_url_rule("/new_conversation", methods=["POST"], view_func=start_new_conversation)

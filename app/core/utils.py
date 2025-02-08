@@ -31,7 +31,7 @@ def save_conversation(conversation_id, data):
     except IOError as e:
         print(f"Error saving conversation {conversation_id}: {e}")
 
-def manage_conversation(conversation_id=None):
+def manage_conversation(conversation_id, user_id):
     """Manage conversation lifecycle using JSON files."""
     current_time = time.time()
     
@@ -46,6 +46,7 @@ def manage_conversation(conversation_id=None):
     
     new_conv_id = str(uuid.uuid4())
     data = {
+        'user_id': user_id,
         'history': [],
         'created_at': current_time,
         'last_activity': current_time
