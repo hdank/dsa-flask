@@ -31,7 +31,7 @@ def save_conversation(conversation_id, data):
     except IOError as e:
         print(f"Error saving conversation {conversation_id}: {e}")
 
-def manage_conversation(conversation_id, user_id):
+def manage_conversation(conversation_id):
     """Manage conversation lifecycle using JSON files."""
     current_time = time.time()
     
@@ -46,7 +46,6 @@ def manage_conversation(conversation_id, user_id):
     
     new_conv_id = str(uuid.uuid4())
     data = {
-        'user_id': user_id,
         'history': [],
         'created_at': current_time,
         'last_activity': current_time
@@ -57,7 +56,7 @@ def manage_conversation(conversation_id, user_id):
 def get_conversation_history(conversation_id):
     """Retrieve conversation history from JSON file."""
     data = load_conversation(conversation_id)
-    return data.get('history', []) if data else []
+    return data
 
 def cleanup_old_conversations():
     """Delete conversations inactive beyond the timeout period."""

@@ -14,7 +14,7 @@ def create_app():
     from app.api.chat import ai_post
     from app.api.pdf import pdf_post, ask_llama, ask_llama_vision, delete_pdf
     from app.api.image import ask_image_post
-    from app.api.conversation import start_new_conversation, get_conversation_history_api
+    from app.api.conversation import start_new_conversation, get_conversation_history_api, get_conversations_history_api
     
     # Add routes to the app
     app.add_url_rule("/ai", methods=["POST"], view_func=ai_post)
@@ -25,6 +25,7 @@ def create_app():
     app.add_url_rule("/ask_image", methods=["POST"], view_func=ask_image_post)
     app.add_url_rule("/new_conversation", methods=["POST"], view_func=start_new_conversation)
     app.add_url_rule("/conversation_history/<conversation_id>", methods=["GET"], view_func=get_conversation_history_api)
+    app.add_url_rule("/conversations_history", methods=["POST"], view_func=get_conversations_history_api)
 
 
     return app
