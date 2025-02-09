@@ -26,8 +26,8 @@ def ask_llama():
         current_history = []
         try:
             # Get current conversation history
-            current_history = get_conversation_history(conversation_id)
-            
+            conversation_data = get_conversation_history(conversation_id)
+            current_history = conversation_data.get('history', [])
             # Get the system prompt from RAG function
             system_prompt = rag_streaming_response(query, current_history)
             
@@ -50,18 +50,19 @@ def ask_llama():
                 'content': query,
                 'created_at': time.time()
             })
-            save_conversation(conversation_id, {
-                'history': current_history,
-                'last_activity': time.time()
-            })
+
+            conversation_data['history'] = current_history
+
+            save_conversation(conversation_id, conversation_data)
             
             messages_for_model = [{"role": "user", "content": prompt}]
-            stream = stream_chat_response(messages_for_model, "llama_vision")
+            stream = stream_chat_response(messages_for_model, "llama")
             vector_store = get_vector_store()
             docs = retrieve_relevant_documents(query, vector_store)
             full_response = []
             for chunk in stream:
                 content = chunk['message']['content']
+                print(content)
                 full_response.append(content)
 
                 response_chunk = {
@@ -137,7 +138,8 @@ def ask_llama_vision():
         current_history = []
         try:
             # Get current conversation history
-            current_history = get_conversation_history(conversation_id)
+            conversation_data = get_conversation_history(conversation_id)
+            current_history = conversation_data.get('history', [])
             
             # Get the system prompt from RAG function
             system_prompt = rag_streaming_response(query, current_history)
@@ -154,6 +156,8 @@ def ask_llama_vision():
             
             # Append the current query
             prompt += f"### User:\n{query}\n\n### Assistant:\n"
+
+            conversation_data['history'] = current_history
             
             # Update history with the new user query (store only the query)
             current_history.append({
@@ -161,10 +165,7 @@ def ask_llama_vision():
                 'content': query,
                 'created_at': time.time()
             })
-            save_conversation(conversation_id, {
-                'history': current_history,
-                'last_activity': time.time()
-            })
+            save_conversation(conversation_id, conversation_data)
             
             messages_for_model = [{"role": "user", "content": prompt,'images': [image_base64] if image_base64 else None}]
             stream = stream_chat_response(messages_for_model, "llama_vision")

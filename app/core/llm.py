@@ -10,7 +10,7 @@ def stream_llm_response(augmented_prompt, model):
             )
     else:
         return chat(
-                model=LLAMA_VISION,
+                model=LLAMA,
                 messages=[{'role': 'user', 'content': f'{augmented_prompt}'}],
                 stream=True,
             )
@@ -27,7 +27,7 @@ def stream_chat_response(messages, model):
             )
     else:
         return chat(
-                model=LLAMA_VISION,
+                model=LLAMA,
                 messages=messages,
                 stream=True,
             )
