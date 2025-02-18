@@ -3,6 +3,7 @@ import os
 import json
 import time
 import uuid
+import logging
 from app.core.config import CONVERSATION_TIMEOUT
 
 def get_conversation_path(conversation_id):
@@ -17,7 +18,7 @@ def load_conversation(conversation_id):
             with open(path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError) as e:
-            print(f"Error loading conversation {conversation_id}: {e}")
+            logging.info(f"Error loading conversation {conversation_id}: {e}")
             return None
     return None
 
@@ -29,7 +30,17 @@ def save_conversation(conversation_id, data):
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except IOError as e:
-        print(f"Error saving conversation {conversation_id}: {e}")
+        logging.info(f"Error saving conversation {conversation_id}: {e}")
+
+def delete_conversation(conversation_id):
+    path = get_conversation_path(conversation_id)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        os.remove(path)
+        logging.info(f"Deleted this conversation_id: {conversation_id}")
+    except OSError as e:
+        logging.info(f"Error deleting {conversation_id}: {e}")
+
 
 def manage_conversation(conversation_id):
     """Manage conversation lifecycle using JSON files."""
@@ -42,7 +53,7 @@ def manage_conversation(conversation_id):
             save_conversation(conversation_id, data)
             return conversation_id
         else:
-            print(f"Conversation {conversation_id} not found, creating new.")
+            logging.info(f"Conversation {conversation_id} not found, creating new.")
     
     new_conv_id = str(uuid.uuid4())
     data = {
@@ -74,6 +85,6 @@ def cleanup_old_conversations():
             if current_time - data['last_activity'] > timeout:
                 try:
                     os.remove(get_conversation_path(conv_id))
-                    print(f"Cleaned up inactive conversation: {conv_id}")
+                    logging.info(f"Cleaned up inactive conversation: {conv_id}")
                 except OSError as e:
-                    print(f"Error deleting {conv_id}: {e}")
+                    logging.info(f"Error deleting {conv_id}: {e}")
