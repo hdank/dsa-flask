@@ -62,6 +62,7 @@ def ask_llama():
             full_response = []
             for chunk in stream:
                 content = chunk['message']['content']
+                print(content, end='')
                 full_response.append(content)
                 print(content, end='')
                 response_chunk = {
@@ -82,6 +83,7 @@ def ask_llama():
             # Combine all chunks into the final assistant response
             complete_response = ''.join(full_response)
             current_history.append({
+                'model': 'llama3.2',
                 'role': 'assistant',
                 'content': complete_response,
                 'docs': docs,
@@ -160,8 +162,10 @@ def ask_llama_vision():
             
             # Update history with the new user query (store only the query)
             current_history.append({
+                'model': 'llama3.2-vision',
                 'role': 'user',
                 'content': query,
+                'images': image_base64,
                 'created_at': time.time()
             })
             save_conversation(conversation_id, conversation_data)
@@ -173,6 +177,7 @@ def ask_llama_vision():
             full_response = []
             for chunk in stream:
                 content = chunk['message']['content']
+                print(content, end='')
                 full_response.append(content)
 
                 response_chunk = {
