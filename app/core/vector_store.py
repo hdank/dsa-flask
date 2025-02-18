@@ -14,9 +14,23 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 def get_vector_store():
      return Chroma(persist_directory=DB_FOLDER, embedding_function=embedding)
+
+def get_dynamic_k(query: str, base_k: int = 3, words_per_increment: int = 10, max_increment: int = 3) -> int:
+    """
+    Calculate a dynamic k value based on the number of words in the query.
+    Every 'words_per_increment' words in the query increases k by 1,
+    up to a maximum additional 'max_increment'.
+    """
+    word_count = len(query.split())
+    # Calculate increment: one extra document per words_per_increment words, capped by max_increment
+    increment = min(max_increment, word_count // words_per_increment)
+    dynamic_k = base_k + increment
+    print(f"Query word count: {word_count}, setting retrieval k to: {dynamic_k}")
+    return dynamic_k
      
-def retrieve_relevant_documents(query, vector_store, k=3):
-    docs_and_scores = vector_store.similarity_search_with_score(query, k=k)
+def retrieve_relevant_documents(query, vector_store, base_k: int = 3) -> list:
+    dynamic_k = get_dynamic_k(query, base_k=base_k)
+    docs_and_scores = vector_store.similarity_search_with_score(query, k=dynamic_k)
     if not docs_and_scores:
         print("No relevant context found.")
         return []

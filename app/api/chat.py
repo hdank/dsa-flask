@@ -26,10 +26,17 @@ def rag_streaming_response(query, conversation_history):
     ]) if context else "No relevant context found."
 
     augmented_prompt = (
-        f"You are a technical assistant good at searching documents. I will give you the Context and you can answer the question from Input. "
-        f"If the Context does not have an answer from the provided information, say so. "
-        f"If the question is not relevant to the Context, you just answer as usual.\n\n"
-        f"Context: {context_str}. Input: {query}"
+        "You are a technical assistant specializing in document search and context-based answering.\n\n"
+        "### System Instructions:\n"
+        "Answer the user's query based solely on the provided context. "
+        "If the context does not have an answer, indicate that the answer is not present.\n\n"
+        "### Retrieved Context:\n"
+        f"{context_str}\n\n"
+        "### Conversation History:\n"
+        f"{formatted_history}\n\n"
+        "### User Query:\n"
+        f"{query}\n\n"
+        "### Assistant Response:\n"
     )
 
     return augmented_prompt
@@ -51,3 +58,6 @@ def ai_post():
             yield f"data: {response_answer}\n\n"  # Format for Server-Sent Events
 
     return Response(generate_response(), content_type='text/event-stream')
+
+    
+

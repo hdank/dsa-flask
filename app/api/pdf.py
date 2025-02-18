@@ -62,9 +62,8 @@ def ask_llama():
             full_response = []
             for chunk in stream:
                 content = chunk['message']['content']
-                print(content)
                 full_response.append(content)
-
+                print(content, end='')
                 response_chunk = {
                     'answer': content, 
                     'conversation_id': conversation_id,
@@ -272,3 +271,4 @@ def delete_pdf():
             "status": 500,
             "error": f"Error deleting document: {str(e)}"
         }, 500
+    
