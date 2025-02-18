@@ -11,25 +11,28 @@ def rag_streaming_response(query, conversation_history):
     if not isinstance(conversation_history, list):
         print(f"Warning: conversation_history is not a list: {conversation_history}")
         conversation_history = []  # Default to an empty list
-    
-    # Ensure every element in conversation_history is a dictionary
+
+    # Format each conversation entry as "Role: Content"
     formatted_history = "\n".join([
         f"{msg['role'].capitalize()}: {msg['content']}" 
-        for msg in conversation_history if isinstance(msg, dict) and 'role' in msg and 'content' in msg
+        for msg in conversation_history 
+        if isinstance(msg, dict) and 'role' in msg and 'content' in msg
     ])
 
-    context = retrieve_relevant_documents(f"{formatted_history}\nUser: {query}", vector_store) if formatted_history else retrieve_relevant_documents(query, vector_store)
+    # Retrieve context based on the conversation history and query
+    context = (retrieve_relevant_documents(f"{formatted_history}\nUser: {query}", vector_store)
+               if formatted_history else retrieve_relevant_documents(query, vector_store))
 
+    # Format the retrieved context for inclusion in the prompt
     context_str = "\n".join([
         f"Document: {doc_info['content']}\nMetadata: {doc_info['metadata']}\nScore: {doc_info['score']}" 
         for doc_info in context
     ]) if context else "No relevant context found."
 
     augmented_prompt = (
-        "You are a technical assistant specializing in document search and context-based answering.\n\n"
+        "You are a highly skilled technical assistant specializing in document search and context-based responses.\n\n"
         "### System Instructions:\n"
-        "Answer the user's query based solely on the provided context. "
-        "If the context does not have an answer, indicate that the answer is not present.\n\n"
+        "1. Answer the user's query primarily based on the context provided below. If the context lacks sufficient or relevant information, feel free to use your internal knowledge.\n"
         "### Retrieved Context:\n"
         f"{context_str}\n\n"
         "### Conversation History:\n"
@@ -40,6 +43,7 @@ def rag_streaming_response(query, conversation_history):
     )
 
     return augmented_prompt
+
 
 
 

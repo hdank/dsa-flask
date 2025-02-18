@@ -31,3 +31,4 @@ def stream_chat_response(messages, model):
                 messages=messages,
                 stream=True,
             )
+    

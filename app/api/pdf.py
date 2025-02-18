@@ -1,4 +1,4 @@
-import time
+import time, logging
 from flask import request, Response, jsonify, json
 from langchain_community.document_loaders import PDFPlumberLoader
 from app.core.vector_store import store_documents, delete_document_by_id, retrieve_relevant_documents, get_vector_store
@@ -11,13 +11,13 @@ from app.core.utils import manage_conversation, cleanup_old_conversations, get_c
 
 
 def ask_llama():
-    print("Post /ask_llama called")
+    logging.info("Post /ask_llama called")
     query = request.form['query']
     conversation_id = request.form.get('conversation_id')
     
     # Manage conversation lifecycle
     conversation_id = manage_conversation(conversation_id)
-    print(f"Using conversation ID: {conversation_id}")
+    logging.info(f"Using conversation ID: {conversation_id}")
     
     # Periodically cleanup old conversations
     cleanup_old_conversations()
@@ -62,9 +62,9 @@ def ask_llama():
             full_response = []
             for chunk in stream:
                 content = chunk['message']['content']
-                print(content, end='')
+                logging.info(content, end='')
                 full_response.append(content)
-                print(content, end='')
+                logging.info(content, end='')
                 response_chunk = {
                     'answer': content, 
                     'conversation_id': conversation_id,
@@ -76,7 +76,7 @@ def ask_llama():
                 try:
                     yield f"data: {response_string}\n\n".encode('utf-8')
                 except UnicodeEncodeError as e:
-                    print(f"Encoding error: {e}")
+                    logging.info(f"Encoding error: {e}")
                     error_response = {'error': f"UnicodeEncodeError: {str(e)}", 'conversation_id': conversation_id, 'is_new_conversation': len(current_history) <= 1}
                     yield f"data: {json.dumps(error_response, ensure_ascii=False)}\n\n".encode('utf-8')
             
@@ -97,7 +97,7 @@ def ask_llama():
             })
             
         except Exception as e:
-            print(f"Error in generate_response: {str(e)}")
+            logging.info(f"Error in generate_response: {str(e)}")
             error_response = {
                 'error': str(e), 
                 'conversation_id': conversation_id,
@@ -107,7 +107,7 @@ def ask_llama():
                 error_string = json.dumps(error_response, ensure_ascii=False)
                 yield f"data: {error_string}\n\n".encode('utf-8')
             except UnicodeEncodeError as e:
-                print(f"Encoding error in error handling: {e}")
+                logging.info(f"Encoding error in error handling: {e}")
                 # If even the error message can't be encoded, provide a basic fallback
                 yield f"data: {json.dumps({'error': 'An unexpected error occurred.'})}\n\n".encode('utf-8')
     
@@ -117,7 +117,7 @@ def ask_llama():
     )
 
 def ask_llama_vision():
-    print("Post /ask_pdf called")
+    logging.info("Post /ask_pdf called")
     query = request.form['query']
     image_file = request.files.get('image')
     conversation_id = request.form.get('conversation_id')
@@ -130,7 +130,7 @@ def ask_llama_vision():
     
     # Manage conversation lifecycle
     conversation_id = manage_conversation(conversation_id)
-    print(f"Using conversation ID: {conversation_id}")
+    logging.info(f"Using conversation ID: {conversation_id}")
     
     # Periodically cleanup old conversations
     cleanup_old_conversations()
@@ -177,7 +177,7 @@ def ask_llama_vision():
             full_response = []
             for chunk in stream:
                 content = chunk['message']['content']
-                print(content, end='')
+                logging.info(content, end='')
                 full_response.append(content)
 
                 response_chunk = {
@@ -191,7 +191,7 @@ def ask_llama_vision():
                 try:
                     yield f"data: {response_string}\n\n".encode('utf-8')
                 except UnicodeEncodeError as e:
-                    print(f"Encoding error: {e}")
+                    logging.info(f"Encoding error: {e}")
                     error_response = {'error': f"UnicodeEncodeError: {str(e)}", 'conversation_id': conversation_id, 'is_new_conversation': len(current_history) <= 1}
                     yield f"data: {json.dumps(error_response, ensure_ascii=False)}\n\n".encode('utf-8')
             
@@ -211,7 +211,7 @@ def ask_llama_vision():
             })
             
         except Exception as e:
-            print(f"Error in generate_response: {str(e)}")
+            logging.info(f"Error in generate_response: {str(e)}")
             error_response = {
                 'error': str(e), 
                 'conversation_id': conversation_id,
@@ -221,7 +221,7 @@ def ask_llama_vision():
                 error_string = json.dumps(error_response, ensure_ascii=False)
                 yield f"data: {error_string}\n\n".encode('utf-8')
             except UnicodeEncodeError as e:
-                print(f"Encoding error in error handling: {e}")
+                logging.info(f"Encoding error in error handling: {e}")
                 # If even the error message can't be encoded, provide a basic fallback
                 yield f"data: {json.dumps({'error': 'An unexpected error occurred.'})}\n\n".encode('utf-8')
     
@@ -235,11 +235,11 @@ def pdf_post():
     file_name = file.filename
     save_file = os.path.join(PDF_FOLDER, file_name)
     file.save(save_file)
-    print(f"filename: {file_name}")
+    logging.info(f"filename: {file_name}")
 
     loader = PDFPlumberLoader(save_file)
     docs = loader.load_and_split()
-    print(f"docs len={len(docs)}")
+    logging.info(f"docs len={len(docs)}")
 
     document_id = store_documents(docs)
 
@@ -264,7 +264,7 @@ def delete_pdf():
         save_file = os.path.join(PDF_FOLDER, file_name)
         if os.path.exists(save_file):
             os.remove(save_file)
-            print(f"Deleted PDF file: {save_file}")
+            logging.info(f"Deleted PDF file: {save_file}")
 
         return {
             "status": 200,
