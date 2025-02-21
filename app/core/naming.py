@@ -61,8 +61,8 @@ def extract_keywords_vi(conversation_history: List[dict], query: str) -> List[st
 
 def generate_text_from_llm(prompt: str, model: str = "llama") -> str:
     """
-    Synchronously generate text from your LLM.
-    This function wraps your streaming API (e.g. stream_chat_response) and collects the response.
+    Synchronously generate text from LLM.
+    This function wraps streaming API (e.g. stream_chat_response) and collects the response.
     """
     from app.core.llm import stream_chat_response  # Assuming this function exists in your project
 
