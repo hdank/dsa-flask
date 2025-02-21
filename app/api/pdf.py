@@ -8,7 +8,7 @@ from app.core.llm import stream_chat_response
 from app.core.utils import manage_conversation, cleanup_old_conversations
 from app.api.chat import rag_streaming_response
 from app.core.utils import manage_conversation, cleanup_old_conversations, get_conversation_history, save_conversation
-
+from app.core.naming import generate_conversation_name
 
 def ask_llama():
     logging.info("Post /ask_llama called")
@@ -28,6 +28,10 @@ def ask_llama():
             # Get current conversation history
             conversation_data = get_conversation_history(conversation_id)
             current_history = conversation_data.get('history', [])
+
+            conversation_name = generate_conversation_name(current_history, query)
+            logging.info(f"Generated conversation name: {conversation_name}")
+
             # Get the system prompt from RAG function
             system_prompt = rag_streaming_response(query, current_history)
             
@@ -48,7 +52,8 @@ def ask_llama():
             current_history.append({
                 'role': 'user',
                 'content': query,
-                'created_at': time.time()
+                'created_at': time.time(),
+                'conversation_name': conversation_name
             })
 
             conversation_data['history'] = current_history
@@ -69,7 +74,8 @@ def ask_llama():
                     'answer': content, 
                     'conversation_id': conversation_id,
                     'is_new_conversation': len(current_history) <= 1,
-                    'docs': docs
+                    'docs': docs,
+                    'name': conversation_name
                 }
                 response_string = json.dumps(response_chunk, ensure_ascii=False)
                 # Encode to bytes for Server-Sent Events
