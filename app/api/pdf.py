@@ -1,5 +1,5 @@
 import time, logging
-from flask import request, Response, jsonify, json
+from flask import request, Response, jsonify, json, send_from_directory
 from langchain_community.document_loaders import PDFPlumberLoader
 from app.core.vector_store import store_documents, delete_document_by_id, retrieve_relevant_documents, get_vector_store
 from app.core.config import PDF_FOLDER
@@ -8,7 +8,20 @@ from app.core.llm import stream_chat_response
 from app.core.utils import manage_conversation, cleanup_old_conversations
 from app.api.chat import rag_streaming_response
 from app.core.utils import manage_conversation, cleanup_old_conversations, get_conversation_history, save_conversation
+import webbrowser
 
+def open_pdf_to_web_browser():
+    json_content = request.json
+    file_name = json_content.get("file_name") + ".pdf"
+
+    if os.path.exists(os.path.join(PDF_FOLDER, file_name)):
+        pdf_url = f"{request.host_url}pdfs/{file_name}"  # Construct the public URL
+        return jsonify({"pdf_url": pdf_url}), 200
+    else:
+        return jsonify({"error": "File not found"}), 404
+    
+def serve_pdf(filename):
+    return send_from_directory(PDF_FOLDER, filename)
 
 def ask_llama():
     logging.info("Post /ask_llama called")
