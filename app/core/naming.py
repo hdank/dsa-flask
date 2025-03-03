@@ -75,7 +75,8 @@ def generate_text_from_llm(prompt: str, model: str = "llama") -> str:
             generated_text += chunk['message']['content']
         return generated_text.strip()
     except Exception as e:
-        raise ValueError("Error: {e}")
+        print(f"Warning: Error generating text from LLM: {e}")
+        return ""  # Return empty string as fallback
 
 def generate_conversation_name(conversation_history: List[dict], query: str) -> str:
     """

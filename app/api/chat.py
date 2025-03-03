@@ -30,9 +30,20 @@ def rag_streaming_response(query, conversation_history):
     ]) if context else "No relevant context found."
 
     augmented_prompt = (
-        "You are a highly skilled technical assistant specializing in document search and context-based responses.\n\n"
+        "You are a highly skilled technical assistant specializing in data structures and algorithms (DSA).\n\n"
         "### System Instructions:\n"
-        "1. Answer the user's query primarily based on the context provided below. If the context lacks sufficient or relevant information, feel free to use your internal knowledge.\n"
+        "1. Answer the user's query primarily based on the context provided below. If the context lacks sufficient or relevant information, use your internal knowledge.\n"
+        "2. Structure your response based on the type of query:\n\n"
+        "   A. If the query is about understanding a data structure or algorithm concept:\n"
+        "      - **CONCEPT**: Provide a clear, concise explanation of the concept\n"
+        "      - **EXAMPLE**: Give a practical example to illustrate the concept\n"
+        "      - **VISUALIZATION**: DO NOT PROVIDE DIRECT YOUTUBE LINKS. Instead, you MUST use the 'get_educational_video' function to get accurate video links.\n\n"
+        "   B. If the query is about implementing or using a data structure or algorithm:\n"
+        "      - **IMPLEMENTATION**: Provide clean, well-commented C/C++ code that implements the solution\n"
+        "      - **EXPLANATION**: Explain how the code works, step-by-step\n"
+        "      - **COMPLEXITY**: Analyze the time and space complexity of the solution\n\n"
+        "3. Always format code blocks properly with syntax highlighting.\n"
+        "4. CRITICAL INSTRUCTION: DO NOT INCLUDE ANY YOUTUBE LINKS OR URLS IN YOUR TEXT RESPONSE. The system will automatically append relevant educational video links after your response.\n\n"
         "### Retrieved Context:\n"
         f"{context_str}\n\n"
         "### Conversation History:\n"
@@ -63,5 +74,5 @@ def ai_post():
 
     return Response(generate_response(), content_type='text/event-stream')
 
-    
+
 

@@ -29,22 +29,32 @@ def get_dynamic_k(query: str, base_k: int = 3, words_per_increment: int = 10, ma
     return dynamic_k
      
 def retrieve_relevant_documents(query, vector_store, base_k: int = 3) -> list:
-    dynamic_k = get_dynamic_k(query, base_k=base_k)
-    docs_and_scores = vector_store.similarity_search_with_score(query, k=dynamic_k)
-    if not docs_and_scores:
-        print("No relevant context found.")
-        return []
+    # Add caching for similar queries
+    import hashlib
+    from functools import lru_cache
+    
+    @lru_cache(maxsize=128)
+    def _cached_retrieval(query_hash, base_k):
+        dynamic_k = get_dynamic_k(query, base_k=base_k)
+        docs_and_scores = vector_store.similarity_search_with_score(query, k=dynamic_k)
+        if not docs_and_scores:
+            print("No relevant context found.")
+            return []
 
-    docs = []
-    for doc, score in docs_and_scores:
-        doc_dict = {
-            'content': doc.page_content,
-            'metadata': doc.metadata,
-            'score': score
-        }
-        docs.append(doc_dict)
+        docs = []
+        for doc, score in docs_and_scores:
+            doc_dict = {
+                'content': doc.page_content,
+                'metadata': doc.metadata,
+                'score': score
+            }
+            docs.append(doc_dict)
 
-    return docs
+        return docs
+    
+    # Create a hash of the query for caching
+    query_hash = hashlib.md5(query.encode()).hexdigest()
+    return _cached_retrieval(query_hash, base_k)
     
 def store_documents(docs):
     # Generate a unique document ID

@@ -4,6 +4,8 @@ import json
 import time
 import uuid
 import logging
+import asyncio
+import threading
 from app.core.config import CONVERSATION_TIMEOUT
 
 def get_conversation_path(conversation_id):
@@ -32,6 +34,16 @@ def save_conversation(conversation_id, data):
     except IOError as e:
         logging.info(f"Error saving conversation {conversation_id}: {e}")
 
+async def async_save_conversation(conversation_id, data):
+    """Save conversation data asynchronously."""
+    path = get_conversation_path(conversation_id)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except IOError as e:
+        logging.info(f"Error saving conversation {conversation_id}: {e}")
+
 def delete_conversation(conversation_id):
     path = get_conversation_path(conversation_id)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -41,6 +53,18 @@ def delete_conversation(conversation_id):
     except OSError as e:
         logging.info(f"Error deleting {conversation_id}: {e}")
 
+def run_async(func, *args, **kwargs):
+    """Run a function asynchronously in a separate thread."""
+    def wrapper():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(func(*args, **kwargs))
+        loop.close()
+    
+    thread = threading.Thread(target=wrapper)
+    thread.daemon = True
+    thread.start()
+    return thread
 
 def manage_conversation(conversation_id):
     """Manage conversation lifecycle using JSON files."""

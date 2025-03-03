@@ -1,6 +1,7 @@
 from flask import request, jsonify
-from app.core.llm import stream_chat_response
 import base64
+from app.core.openai_client import OpenAICompatibleClient
+from app.core.config import OPENAI_API_BASE_URL
 
 def ask_image_post():
     print("POST /ask_image called")
@@ -15,23 +16,12 @@ def ask_image_post():
     if 'query' not in request.form:
         return jsonify({"error": "No query provided"}), 400
     
-    query = request.form['query']
-
+    # Pass to the vision API which now handles conversation storage
+    from app.service.llm_service import _process_llama_request_with_qwen
+    
     # Read the image file and convert it to base64
     image_data = image_file.read()
     image_base64 = base64.b64encode(image_data).decode('utf-8')
-
-    messages = [
-        {'role': 'user',
-         'content': query,
-         'images': [image_base64] 
-        }
-    ]
     
-    res = stream_chat_response(messages)
-    
-    full_response = ""
-    for chunk in res:
-        full_response += chunk['message']['content']
-    print(full_response)
-    return jsonify({"response": full_response})
+    # Use the service function to properly handle conversation
+    return _process_llama_request_with_qwen(request.form, image_base64)

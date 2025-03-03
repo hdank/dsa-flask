@@ -19,23 +19,51 @@ def open_pdf_to_web_browser():
 def serve_pdf(filename):
     return send_from_directory(PDF_FOLDER, filename)
 
-def ask_llama():
+def ask_text():
     """Handle requests to the /ask_llama endpoint."""
     logging.info("POST /ask_llama called")
     return _process_llama_request(request.form, None)
 
-def ask_llama_vision():
+def ask_vision():
     """Handle requests to the /ask_llama_vision endpoint."""
     logging.info("POST /ask_llama_vision called")
     image_file = request.files.get('image')
     
+    # Check if query is provided
+    if 'query' not in request.form:
+        return jsonify({"error": "No query provided"}), 400
+    
     # Process image if provided
     image_base64 = None
     if image_file:
-        image_data = image_file.read()
-        image_base64 = base64.b64encode(image_data).decode('utf-8')
-    
-    return _process_llama_request(request.form, image_base64)
+        try:
+            # Resize the image before encoding to reduce size
+            from PIL import Image
+            import io
+            
+            image_data = image_file.read()
+            image = Image.open(io.BytesIO(image_data))
+            
+            # Resize to a reasonable size (maintain aspect ratio)
+            max_size = 800
+            if max(image.size) > max_size:
+                ratio = max_size / max(image.size)
+                new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+                image = image.resize(new_size, Image.LANCZOS)
+            
+            # Convert back to bytes - USE THIS RESIZED IMAGE DATA
+            buffer = io.BytesIO()
+            image.save(buffer, format="JPEG", quality=85)
+            buffer.seek(0)
+            image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            
+            logging.info(f"Image processed successfully, size: {len(image_base64)}")
+            return _process_llama_request(request.form, image_base64)
+        except Exception as e:
+            logging.error(f"Error processing image: {str(e)}")
+            return jsonify({"error": f"Error processing image: {str(e)}"}), 500
+    else:
+        return jsonify({"error": "No image file provided"}), 400
 
 def pdf_post():
     file = request.files["file"]
@@ -83,4 +111,3 @@ def delete_pdf():
             "status": 500,
             "error": f"Error deleting document: {str(e)}"
         }, 500
-    
