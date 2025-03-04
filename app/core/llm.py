@@ -1,5 +1,5 @@
 from ollama import chat
-from app.core.config import LLAMA, LLAMA_VISION, OPENAI_API_BASE_URL, OPENAI_MODEL, USE_OPENAI_COMPATIBLE_API
+from app.core.config import OPENAI_API_BASE_URL, OPENAI_MODEL, USE_OPENAI_COMPATIBLE_API
 import logging
 
 logger = logging.getLogger(__name__)

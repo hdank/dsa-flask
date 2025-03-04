@@ -10,19 +10,29 @@ from app.core.config import CONVERSATION_TIMEOUT
 
 def get_conversation_path(conversation_id):
     """Get the file path for a conversation JSON file."""
-    return os.path.join('conversations', f'{conversation_id}.json')
+    # Use absolute path to ensure correct location
+    base_dir = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    conversations_dir = os.path.join(base_dir, 'conversations')
+    os.makedirs(conversations_dir, exist_ok=True)
+    return os.path.join(conversations_dir, f'{conversation_id}.json')
 
 def load_conversation(conversation_id):
     """Load conversation data from a JSON file."""
     path = get_conversation_path(conversation_id)
+    logging.info(f"Attempting to load conversation from: {path}")
+    
     if os.path.exists(path):
         try:
             with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
+                logging.info(f"Successfully loaded conversation {conversation_id}")
+                return data
         except (json.JSONDecodeError, IOError) as e:
-            logging.info(f"Error loading conversation {conversation_id}: {e}")
+            logging.error(f"Error loading conversation {conversation_id}: {e}")
             return None
-    return None
+    else:
+        logging.warning(f"Conversation file does not exist: {path}")
+        return None
 
 def save_conversation(conversation_id, data):
     """Save conversation data to a JSON file."""
@@ -90,7 +100,17 @@ def manage_conversation(conversation_id):
 
 def get_conversation_history(conversation_id):
     """Retrieve conversation history from JSON file."""
+    path = get_conversation_path(conversation_id)
+    
+    # Log more detailed information for debugging
+    logging.info(f"Retrieving conversation from: {path}")
+    logging.info(f"File exists: {os.path.exists(path)}")
+    
     data = load_conversation(conversation_id)
+    
+    # Log the data we got
+    logging.info(f"Retrieved data: {data}")
+    
     return data
 
 def cleanup_old_conversations():

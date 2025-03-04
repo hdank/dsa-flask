@@ -1,5 +1,5 @@
 from flask import jsonify, request
-from app.core.utils import manage_conversation, get_conversation_history, delete_conversation
+from app.core.utils import manage_conversation, get_conversation_history, delete_conversation, save_conversation
 
 def start_new_conversation():
     conversation_id = manage_conversation(None)  # Force new conversation
@@ -14,14 +14,52 @@ def delete_a_conversation(conversation_id):
     return jsonify({
         "status": "success",
         "conversation_id": conversation_id,
-        "message": "Suceessfully deleted this conversation id"
+        "message": "Successfully deleted this conversation"
     })
 
 def get_conversation_history_api(conversation_id):
+    """API endpoint to retrieve a conversation's history."""
     data = get_conversation_history(conversation_id)
+    
+    if data is None:
+        return jsonify({
+            "status": "error",
+            "conversation_id": conversation_id,
+            "message": "Conversation not found"
+        }), 404
+        
     return jsonify({
+        "status": "success",
         "conversation_id": conversation_id,
         "data": data
+    })
+
+def update_conversation_api(conversation_id):
+    """API endpoint to update a conversation's data"""
+    json_content = request.json
+    if not json_content:
+        return jsonify({
+            "error": "No data provided",
+            "status": 400
+        }), 400
+    
+    # Get existing data first
+    existing_data = get_conversation_history(conversation_id)
+    if not existing_data:
+        return jsonify({
+            "status": "error",
+            "conversation_id": conversation_id,
+            "message": "Conversation not found"
+        }), 404
+    
+    # Update the conversation with new data
+    updated_data = {**existing_data, **json_content}
+    save_conversation(conversation_id, updated_data)
+    
+    return jsonify({
+        "status": "success",
+        "conversation_id": conversation_id,
+        "message": "Conversation updated successfully"
     })
 
 def get_conversations_history_api():
