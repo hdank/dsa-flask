@@ -1,4 +1,4 @@
-import logging, time, json
+import logging, time, json, traceback, threading
 from flask import Response
 from app.core.utils import async_save_conversation, manage_conversation, cleanup_old_conversations, get_conversation_history, run_async, save_conversation
 from app.core.naming import generate_conversation_name
@@ -6,13 +6,91 @@ from app.api.chat import rag_streaming_response
 from app.core.vector_store import get_vector_store, retrieve_relevant_documents
 from app.core.config import (
     OPENAI_API_BASE_URL, 
-    OPENAI_MODEL,  # "llama-3.2-1b-instruct:2"
-    OPENAI_VISION_MODEL  # "qwen2-vl-7b-instruct"
+    OPENAI_MODEL,
+    OPENAI_VISION_MODEL,
+    SYSTEM_PROMPT
 )
 from app.core.openai_client import OpenAICompatibleClient
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Initialize the OpenAI compatible client
 openai_client = OpenAICompatibleClient(OPENAI_API_BASE_URL)
+
+def ensure_structured_response(response, query):
+    """Ensures the response follows the structured format with HTML tags"""
+    # Check if the response contains any of the expected tags
+    expected_tags = ["<KHÁI_NIỆM>", "<VÍ_DỤ>", "<TRỰC_QUAN_HÓA>", 
+                     "<TRIỂN_KHAI>", "<GIẢI_THÍCH>", "<ĐỘ_PHỨC_TẠP>"]
+    
+    has_tags = any(tag in response for tag in expected_tags)
+    
+    # Remove duplicate video sections before processing
+    if "### Educational Videos" in response:
+        # Get all parts of the text
+        parts = response.split("### Educational Videos")
+        
+        # If there are multiple video sections, keep only the first one
+        if len(parts) > 2:  # More than one "### Educational Videos" found
+            base_text = parts[0]
+            video_section = "### Educational Videos" + parts[1]
+            response = base_text + video_section
+    
+    if not has_tags:
+        # If it's likely about a concept
+        if any(keyword in query.lower() for keyword in ["là gì", "khái niệm", "định nghĩa"]):
+            # Create parts separately to avoid backslash issues in f-strings
+            # Split by video section first if it exists
+            main_content = response.split("### Educational Videos")[0] if "### Educational Videos" in response else response
+            
+            # Now split the main content for concept and example
+            content_parts = main_content.split('\n\n')
+            concept_part = content_parts[0] if content_parts else main_content
+            example_part = content_parts[1] if len(content_parts) > 1 else "Xem phần khái niệm."
+            
+            structured = "<KHÁI_NIỆM>\n"
+            structured += concept_part
+            structured += "\n</KHÁI_NIỆM>\n\n"
+            
+            # Get video section if it exists
+            video_section = ""
+            if "### Educational Videos" in response:
+                video_content = response.split("### Educational Videos")[1]
+                video_content = video_content.replace("</VIDEOS>", "")
+                video_section = "<VIDEOS>\n### Educational Videos" + video_content + "</VIDEOS>"
+            
+            # If we have videos, use them as the example
+            if video_section:
+                structured += "<VÍ_DỤ>\n"
+                structured += video_section
+                structured += "\n</VÍ_DỤ>\n\n"
+            else:
+                structured += "<VÍ_DỤ>\n"
+                structured += example_part
+                structured += "\n</VÍ_DỤ>\n\n"
+            
+            structured += "<TRỰC_QUAN_HÓA>\n"
+            structured += "Thuật toán này có thể được trực quan hóa thông qua các bước sắp xếp trên một mảng dữ liệu."
+            structured += "\n</TRỰC_QUAN_HÓA>"
+            
+            return structured
+    
+    # Fix potential issues with existing tags
+    if "</VIDEOS></VIDEOS>" in response:
+        response = response.replace("</VIDEOS></VIDEOS>", "</VIDEOS>")
+    
+    # Check for duplicate video sections in responses with tags
+    if response.count("<VIDEOS>") > 1:
+        # Keep only the first video section
+        first_video_end = response.find("</VIDEOS>") + 9  # Length of "</VIDEOS>"
+        second_video_start = response.find("<VIDEOS>", first_video_end)
+        
+        if second_video_start > 0:
+            response = response[:second_video_start]
+    
+    return response
 
 def _process_llama_request(form_data, image_base64=None):
     """
@@ -43,15 +121,6 @@ def _process_llama_request(form_data, image_base64=None):
 def _generate_llama_response(query, conversation_id, image_base64=None):
     """Generate streaming response using OpenAI compatible API with RAG integration."""
     from app.core.function_call import get_educational_video
-    import traceback
-    import time
-    import json
-    import threading
-    from app.core.openai_client import OpenAICompatibleClient
-    from app.core.config import OPENAI_API_BASE_URL, OPENAI_MODEL, OPENAI_VISION_MODEL
-    
-    # Initialize the OpenAI client
-    openai_client = OpenAICompatibleClient(OPENAI_API_BASE_URL)
     
     # Get existing conversation history
     history = get_conversation_history(conversation_id)
@@ -63,10 +132,11 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
     
     try:
         # Generate conversation name if it doesn't exist
-        if not history.get('name'):
+        if not history or not history.get('name'):
             name_suffix = " (image analysis)" if image_base64 else ""
             try:
-                current_history = history.get('messages', [])
+                current_history = history.get('messages', []) if history else []
+                history = history or {}
                 history['name'] = generate_conversation_name(current_history, query)
             except Exception as e:
                 logging.error(f"Error generating conversation name: {str(e)}")
@@ -153,82 +223,93 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
                     ]
                 }
             ]
-            
-            # No function calling for vision model
-            function_call = None
-            functions = None
         else:
-            # Text model format with function calling and RAG
+            # Text model format with RAG and improved system prompt
+            # Format the conversation history
+            formatted_history = "\n".join([
+                f"{msg['role'].capitalize()}: {msg['content']}" 
+                for msg in history.get('messages', [])
+                if isinstance(msg, dict) and 'role' in msg and 'content' in msg
+                and msg['role'] != 'assistant'  # Skip past assistant responses to avoid repetition
+            ])
+            
+            # Format retrieved context for the prompt
+            context_str = "\n".join([
+                f"Tài liệu: {doc.get('content', '')}\nĐộ liên quan: {doc.get('score', 0)}" 
+                for doc in retrieved_docs
+            ]) if retrieved_docs else "Không tìm thấy ngữ cảnh liên quan."
+            
+            # Format the prompt with the retrieved context, history, and query
             messages = [
                 {
-                    'role': 'system', 
-                    'content': "You are a technical assistant specialized in data structures and algorithms."
-                },
-                {
-                    'role': 'user', 
-                    'content': rag_streaming_response(query, history.get('messages', []))
+                    'role': 'system',
+                    'content': SYSTEM_PROMPT.format(
+                        context=context_str,
+                        history=formatted_history,
+                        input=query
+                    )
                 }
             ]
-            
-            # Define function schema for text model
-            functions = [
-                {
-                    "name": "get_educational_video",
-                    "description": "Get specific, pre-selected educational videos about data structures and algorithms topics",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "topic": {
-                                "type": "string", 
-                                "description": "The data structure or algorithm topic to find videos about (e.g., 'merge sort', 'binary tree')"
-                            },
-                            "max_results": {
-                                "type": "integer",
-                                "description": "Maximum number of video results to return",
-                                "default": 3
-                            }
-                        },
-                        "required": ["topic"]
-                    }
-                }
-            ]
-            
-            # Force function calling for certain topics
-            function_call = "auto"
-            visualization_topics = [
-                "sort", "search", "tree", "graph", "list", "stack", "queue", "heap",
-                "hash", "binary", "merge", "quick", "insertion", "bubble", "linked list",
-                "depth first", "breadth first", "dfs", "bfs", "algorithm", "data structure"
-            ]
-            
-            if any(topic in lower_query for topic in visualization_topics):
-                function_call = {"name": "get_educational_video"}
-                logging.info(f"Forcing function call to get_educational_video for query: {query}")
         
         # Set timeout for the API request to prevent hanging
         response_data = {"completed": False, "error": None, "chunks": []}
         
+        # This function will be executed in a separate thread
         def process_stream():
             try:
-                # Use the OpenAI client to get a response stream
-                stream = openai_client.chat_completion(
-                    messages=messages,
-                    model=model_name,
-                    functions=functions,
-                    function_call=function_call
+                logging.info(f"Sending request to API: {OPENAI_API_BASE_URL}")
+                
+                # Use the direct API request approach to avoid potential client issues
+                import requests
+                
+                # Construct URL for the API endpoint
+                url = f"{OPENAI_API_BASE_URL}/chat/completions"
+                
+                # Create API payload
+                payload = {
+                    "model": model_name,
+                    "messages": messages,
+                    "stream": True,
+                    "temperature": 0.7
+                }
+                
+                # Make streaming API request
+                response = requests.post(
+                    url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    stream=True
                 )
                 
-                # Process the response stream
-                for chunk in stream:
-                    if 'message' in chunk and 'content' in chunk['message']:
-                        response_data["chunks"].append(chunk['message']['content'])
-                    elif 'function_call' in chunk:
-                        # Handle function calling
-                        response_data["chunks"].append(json.dumps(chunk['function_call']))
+                if not response.ok:
+                    logging.error(f"API request failed with status code {response.status_code}: {response.text}")
+                    response_data["error"] = f"API request failed: {response.text}"
+                    return
+                
+                # Process the streaming response
+                for line in response.iter_lines():
+                    if line:
+                        line = line.decode('utf-8')
+                        if line.startswith('data: '):
+                            data = line[6:]  # Remove 'data: ' prefix
+                            if data.strip() == '[DONE]':
+                                break
+                                
+                            try:
+                                chunk_data = json.loads(data)
+                                if chunk_data.get('choices') and len(chunk_data['choices']) > 0:
+                                    delta = chunk_data['choices'][0].get('delta', {})
+                                    content = delta.get('content')
+                                    
+                                    if content:
+                                        response_data["chunks"].append(content)
+                            except json.JSONDecodeError as e:
+                                logging.error(f"Failed to parse JSON chunk: {data}, error: {e}")
                 
                 response_data["completed"] = True
+                
             except Exception as e:
-                logging.error(f"Error in generate_response: {str(e)}")
+                logging.error(f"Error in process_stream: {str(e)}")
                 logging.error(traceback.format_exc())
                 response_data["error"] = str(e)
         
@@ -268,38 +349,6 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
                 while response_data["chunks"]:
                     chunk = response_data["chunks"].pop(0)
                     full_response += chunk
-                    
-                    # Process function calls if present
-                    function_call_data = None
-                    try:
-                        # Check if the chunk is a JSON string containing function call data
-                        parsed = json.loads(chunk)
-                        if isinstance(parsed, dict) and 'name' in parsed and 'arguments' in parsed:
-                            function_call_data = parsed
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-                        
-                    if function_call_data:
-                        try:
-                            # Handle function call and generate response
-                            function_name = function_call_data.get('name')
-                            arguments = json.loads(function_call_data.get('arguments', '{}'))
-                            
-                            if function_name == 'get_educational_video':
-                                topic = arguments.get('topic', '')
-                                max_results = int(arguments.get('max_results', 3))
-                                video_results = get_educational_video(topic, max_results)
-                                
-                                # Append video results to full response
-                                video_response = f"\n\n### Educational Videos about {topic}:\n"
-                                for idx, video in enumerate(video_results, 1):
-                                    video_response += f"{idx}. [{video['title']}]({video['url']})\n"
-                                    video_response += f"   Channel: {video['channel']}\n\n"
-                                
-                                full_response += video_response
-                                chunk = video_response
-                        except Exception as func_err:
-                            logging.error(f"Error in function call: {str(func_err)}")
                     
                     data = {
                         'type': 'content',
@@ -357,10 +406,10 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
                     if videos:
                         # Format video section - use the actual topic from the query for better heading
                         search_topic = query if len(query) < 30 else video_topic
-                        video_section = f"\n\n### Educational Videos for {search_topic.title()}:\n"
+                        video_section = f"\n\n<VIDEOS>\n### Educational Videos for {search_topic.title()}:\n"
                         for idx, video in enumerate(videos, 1):
                             video_section += f"{idx}. [{video['title']}]({video['url']})\n"
-                            video_section += f"   Channel: {video['channel']}\n\n"
+                        video_section += "</VIDEOS>"
                         
                         # Add to full response
                         full_response += video_section
@@ -382,6 +431,8 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
             
             # Save the complete conversation
             if full_response:
+                # Apply structure formatting
+                full_response = ensure_structured_response(full_response, query)
                 # Create assistant message
                 assistant_message = {
                     'role': 'assistant',
