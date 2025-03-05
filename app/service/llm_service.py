@@ -11,6 +11,7 @@ from app.core.config import (
     SYSTEM_PROMPT
 )
 from app.core.openai_client import OpenAICompatibleClient
+from app.core.evaluation import evaluate_response
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -22,8 +23,8 @@ openai_client = OpenAICompatibleClient(OPENAI_API_BASE_URL)
 def ensure_structured_response(response, query):
     """Ensures the response follows the structured format with HTML tags"""
     # Check if the response contains any of the expected tags
-    expected_tags = ["<KHÁI_NIỆM>", "<VÍ_DỤ>", "<TRỰC_QUAN_HÓA>", 
-                     "<TRIỂN_KHAI>", "<GIẢI_THÍCH>", "<ĐỘ_PHỨC_TẠP>"]
+    expected_tags = ["<CONCEPT>", "<EXAMPLE>", "<VISUALIZATION>", 
+                     "<IMPLEMENTATION>", "<EXPLAINATION>", "<COMPLEXITY>"]
     
     has_tags = any(tag in response for tag in expected_tags)
     
@@ -50,9 +51,9 @@ def ensure_structured_response(response, query):
             concept_part = content_parts[0] if content_parts else main_content
             example_part = content_parts[1] if len(content_parts) > 1 else "Xem phần khái niệm."
             
-            structured = "<KHÁI_NIỆM>\n"
+            structured = "<CONCEPT>\n"
             structured += concept_part
-            structured += "\n</KHÁI_NIỆM>\n\n"
+            structured += "\n</CONCEPT>\n\n"
             
             # Get video section if it exists
             video_section = ""
@@ -63,17 +64,17 @@ def ensure_structured_response(response, query):
             
             # If we have videos, use them as the example
             if video_section:
-                structured += "<VÍ_DỤ>\n"
+                structured += "<EXAMPLE>\n"
                 structured += video_section
-                structured += "\n</VÍ_DỤ>\n\n"
+                structured += "\n</EXAMPLE>\n\n"
             else:
-                structured += "<VÍ_DỤ>\n"
+                structured += "<EXAMPLE>\n"
                 structured += example_part
-                structured += "\n</VÍ_DỤ>\n\n"
+                structured += "\n</EXAMPLE>\n\n"
             
-            structured += "<TRỰC_QUAN_HÓA>\n"
+            structured += "<VISUALIZATION>\n"
             structured += "Thuật toán này có thể được trực quan hóa thông qua các bước sắp xếp trên một mảng dữ liệu."
-            structured += "\n</TRỰC_QUAN_HÓA>"
+            structured += "\n</VISUALIZATION>"
             
             return structured
     
@@ -132,7 +133,7 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
     
     try:
         # Generate conversation name if it doesn't exist
-        if not history or not history.get('name'):
+        if not history or not history.get('name') or history.get('name') == "New Conversation":
             name_suffix = " (image analysis)" if image_base64 else ""
             try:
                 current_history = history.get('messages', []) if history else []
@@ -433,12 +434,30 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
             if full_response:
                 # Apply structure formatting
                 full_response = ensure_structured_response(full_response, query)
-                # Create assistant message
+            # Evaluate the response
+            try:
+                evaluation = evaluate_response(query, full_response, video_topic)
+                logger.info(f"Response evaluation score: {evaluation['combined_score']}")
+                
+                # Create assistant message with embedded evaluation
                 assistant_message = {
                     'role': 'assistant',
                     'model': model_name,
                     'content': full_response,
-                    'created_at': time.time()
+                    'created_at': time.time(),
+                    'evaluation': {  # Store compact evaluation data
+                        'scores': {
+                            'structure': evaluation['structure_score'],
+                            'content': evaluation['content_score'],
+                            'relevance': evaluation['relevance_score'],
+                            'combined': evaluation['combined_score']
+                        },
+                        'summary': {
+                            'structure': evaluation['details']['structure'].get('summary', ''),
+                            'content': evaluation['details']['content'].get('summary', ''),
+                            'relevance': evaluation['details']['relevance'].get('summary', '')
+                        }
+                    }
                 }
                 
                 # Always store retrieved documents in the message for future reference
@@ -460,8 +479,47 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
                 history['last_activity'] = time.time()
                 
                 # Save the complete conversation
-                save_conversation(conversation_id, history)
+                run_async(async_save_conversation, conversation_id, history)
                 logging.info(f"Saved conversation {conversation_id} with {len(history['messages'])} messages")
+                
+                # Send evaluation data to the client
+                eval_data = {
+                    'type': 'evaluation',
+                    'conversation_id': conversation_id,
+                    'scores': assistant_message['evaluation']['scores'],
+                    'summary': assistant_message['evaluation']['summary']
+                }
+                yield f"data: {json.dumps(eval_data)}\n\n"
+                
+            except Exception as e:
+                logger.error(f"Error evaluating response: {str(e)}")
+                logger.error(traceback.format_exc())
+                
+                # Still create assistant message but without evaluation
+                assistant_message = {
+                    'role': 'assistant',
+                    'model': model_name,
+                    'content': full_response,
+                    'created_at': time.time()
+                }
+                
+                # Add docs if available
+                if retrieved_docs:
+                    assistant_message['docs'] = [
+                        {
+                            'content': doc.get('content', ''),
+                            'metadata': doc.get('metadata', {}),
+                            'score': float(doc.get('score', 0))
+                        }
+                        for doc in retrieved_docs
+                    ]
+                
+                # Add to history
+                history['messages'].append(assistant_message)
+                history['last_activity'] = time.time()
+                run_async(async_save_conversation, conversation_id, history)
+                
+            yield "data: [DONE]\n\n"
         
         return generate()
     except Exception as e:

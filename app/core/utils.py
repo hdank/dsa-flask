@@ -21,6 +21,16 @@ def get_conversation_path(conversation_id):
     """Get the file path for a conversation JSON file."""
     return CONVERSATIONS_DIR / f"{conversation_id}.json"
 
+def list_conversations():
+    """Return a list of all conversation IDs"""
+    conversations_path = CONVERSATIONS_DIR
+    if not conversations_path.exists():
+        return []
+        
+    conversation_files = conversations_path.glob("*.json")
+    conversation_ids = [f.stem for f in conversation_files]
+    return conversation_ids
+
 def load_conversation(conversation_id):
     """Load conversation data from a JSON file."""
     path = get_conversation_path(conversation_id)
