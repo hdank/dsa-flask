@@ -1,3 +1,4 @@
+import logging
 import spacy
 import random
 from typing import List
@@ -75,8 +76,7 @@ def generate_text_from_llm(prompt: str, model: str = "llama") -> str:
             generated_text += chunk['message']['content']
         return generated_text.strip()
     except Exception as e:
-        print(f"Warning: Error generating text from LLM: {e}")
-        return ""  # Return empty string as fallback
+        raise ValueError(f"Error generating text from LLM: {e}")
 
 def generate_conversation_name(conversation_history: List[dict], query: str) -> str:
     """
@@ -86,33 +86,41 @@ def generate_conversation_name(conversation_history: List[dict], query: str) -> 
     # Detect language from the query.
     language = detect_language(query)
     
-    # Extract keywords based on language.
-    if language == "vi":
-        key_words = extract_keywords_vi(conversation_history, query)
-    else:
-        key_words = extract_keywords_en(conversation_history, query)
+    # Initialize conversation_name as None
+    conversation_name = None
     
     # Prepare a generative prompt including the query and the extracted topics.
-    if language == "vi":
-        topics_str = ", ".join(key_words) if key_words else ""
-        prompt = (
-            f"Hãy tạo một tiêu đề cuộc trò chuyện sáng tạo và chuyên nghiệp cho nội dung: \"{query}\" "
-            f"với các chủ đề chính: {topics_str}. Tiêu đề cần ngắn gọn, thu hút và phù hợp với văn phong tiếng Việt."
-            f"Chỉ được đưa ra MỘT tiêu đề, không được nhiều hơn. Chỉ được phép trả lời với tên tiêu đề và không bình luận gì thêm. "
-        )
-    else:
-        topics_str = ", ".join(key_words) if key_words else ""
-        prompt = (
-            f"Generate a creative and professional conversation title for a discussion with the content: \"{query}\" "
-            f"and key topics: {topics_str}. The title should be short, engaging, and appropriate for a professional setting."
-            f"Only generate ONE conversation title, do not commentary about anything else, you should only response with the conversation title"
-        )
+    try:
+        if language == "vi":
+            prompt = f"Tạo tiêu đề ngắn gọn cho cuộc trò chuyện về: \"{query}\""
+        else:
+            prompt = f"Create a short title for a conversation about: \"{query}\""
+                
+        # Call LLM only once
+        conversation_name = generate_text_from_llm(prompt)
+    except Exception as e:
+        logging.error(f"Error using LLM for conversation name: {str(e)}")
     
-    # Call the LLM to generate the title.
-    conversation_name = generate_text_from_llm(prompt)
-    
-    # Fallback if no title is generated.
+    # Create topic-based titles if LLM fails
     if not conversation_name:
-        conversation_name = "Cuộc hội thoại chưa có tiêu đề" if language == "vi" else "Untitled Conversation"
+        # Check for common data structure/algorithm terms
+        topic_mapping = {
+            'stack': 'Cấu trúc dữ liệu Stack' if language == 'vi' else 'Stack Data Structure',
+            'queue': 'Cấu trúc dữ liệu Queue' if language == 'vi' else 'Queue Data Structure',
+            'linked list': 'Cấu trúc dữ liệu Linked List' if language == 'vi' else 'Linked List Data Structure',
+            'binary tree': 'Cấu trúc dữ liệu Binary Tree' if language == 'vi' else 'Binary Tree Data Structure',
+            'quick sort': 'Thuật toán Quick Sort' if language == 'vi' else 'Quick Sort Algorithm',
+            'merge sort': 'Thuật toán Merge Sort' if language == 'vi' else 'Merge Sort Algorithm',
+            'bubble sort': 'Thuật toán Bubble Sort' if language == 'vi' else 'Bubble Sort Algorithm',
+        }
+        
+        for key, title in topic_mapping.items():
+            if key in query.lower():
+                conversation_name = title
+                break
+                
+        # If no specific topic found, use a generic title
+        if not conversation_name:
+            conversation_name = "Cuộc hội thoại chưa có tiêu đề" if language == 'vi' else "Untitled Conversation"
     
     return conversation_name

@@ -134,14 +134,12 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
     try:
         # Generate conversation name if it doesn't exist
         if not history or not history.get('name') or history.get('name') == "New Conversation":
-            name_suffix = " (image analysis)" if image_base64 else ""
             try:
                 current_history = history.get('messages', []) if history else []
                 history = history or {}
                 history['name'] = generate_conversation_name(current_history, query)
             except Exception as e:
                 logging.error(f"Error generating conversation name: {str(e)}")
-                history['name'] = f"Untitled"
             run_async(async_save_conversation, conversation_id, history)
         
         # Add user message to history first
@@ -436,7 +434,7 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
                 full_response = ensure_structured_response(full_response, query)
             # Evaluate the response
             try:
-                evaluation = evaluate_response(query, full_response, video_topic)
+                evaluation, eval_path = evaluate_response(query, full_response, video_topic, conversation_id)
                 logger.info(f"Response evaluation score: {evaluation['combined_score']}")
                 
                 # Create assistant message with embedded evaluation
@@ -445,7 +443,7 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
                     'model': model_name,
                     'content': full_response,
                     'created_at': time.time(),
-                    'evaluation': {  # Store compact evaluation data
+                    'evaluation': {
                         'scores': {
                             'structure': evaluation['structure_score'],
                             'content': evaluation['content_score'],
@@ -456,7 +454,23 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
                             'structure': evaluation['details']['structure'].get('summary', ''),
                             'content': evaluation['details']['content'].get('summary', ''),
                             'relevance': evaluation['details']['relevance'].get('summary', '')
-                        }
+                        },
+                        'summary_vi': {
+                            'structure': evaluation['details']['structure'].get('summary_vi', ''),
+                            'content': evaluation['details']['content'].get('summary_vi', ''),
+                            'relevance': evaluation['details']['relevance'].get('summary_vi', '')
+                        },
+                        'findings': {
+                            'structure': evaluation['details']['structure'].get('findings', []),
+                            'content': evaluation['details']['content'].get('findings', []),
+                            'relevance': evaluation['details']['relevance'].get('findings', [])
+                        },
+                        'findings_vi': {
+                            'structure': evaluation['details']['structure'].get('findings_vi', []),
+                            'content': evaluation['details']['content'].get('findings_vi', []),
+                            'relevance': evaluation['details']['relevance'].get('findings_vi', [])
+                        },
+                        'eval_file_path': eval_path
                     }
                 }
                 
@@ -482,12 +496,16 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
                 run_async(async_save_conversation, conversation_id, history)
                 logging.info(f"Saved conversation {conversation_id} with {len(history['messages'])} messages")
                 
-                # Send evaluation data to the client
+                # Send full evaluation data to the client
                 eval_data = {
                     'type': 'evaluation',
                     'conversation_id': conversation_id,
                     'scores': assistant_message['evaluation']['scores'],
-                    'summary': assistant_message['evaluation']['summary']
+                    'summary': assistant_message['evaluation']['summary'],
+                    'summary_vi': assistant_message['evaluation']['summary_vi'],
+                    'findings': assistant_message['evaluation']['findings'],
+                    'findings_vi': assistant_message['evaluation']['findings_vi'],
+                    'eval_path': eval_path
                 }
                 yield f"data: {json.dumps(eval_data)}\n\n"
                 
