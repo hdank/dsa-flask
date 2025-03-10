@@ -317,8 +317,8 @@ def _generate_llama_response(query, conversation_id, image_base64=None):
         process_thread.daemon = True
         process_thread.start()
         
-        # Define a reasonable timeout (e.g., 60 seconds)
-        timeout_seconds = 60
+        # Define a reasonable timeout (e.g., 240 seconds)
+        timeout_seconds = 240
         start_time = time.time()
         
         def generate():
