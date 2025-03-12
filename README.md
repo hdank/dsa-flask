@@ -379,7 +379,8 @@ topic_score = 100 if detected_dsa_topics else 0
 ```
 
 **Kiểm tra định dạng phản hồi** (10% trọng số):
-```pythonformat_score = 100 if format_matches else 0
+```python
+format_score = 100 if format_matches else 0
 ```
 
 ### Đo lường tương đồng văn bản
