@@ -74,6 +74,91 @@ Mỗi câu trả lời của hệ thống được đánh giá tự động về
 ### Vector Store
 Sử dụng cơ sở dữ liệu Chroma để lưu trữ và truy xuất vector nhúng (embeddings) của văn bản. Chức năng này hỗ trợ tìm kiếm ngữ nghĩa trong tài liệu.
 
+#### Chức năng chính của ChromaDB
+1. **Lưu trữ tài liệu**: Chuyển đổi văn bản thành vector nhúng và lưu trữ
+2. **Phân đoạn tài liệu**: Chia tài liệu thành các đoạn nhỏ (chunks) để xử lý hiệu quả
+3. **Tìm kiếm tương tự**: Truy xuất các đoạn tài liệu có ngữ nghĩa tương đồng với truy vấn
+4. **Quản lý metadata**: Lưu trữ thông tin về nguồn gốc và thuộc tính của tài liệu
+
+#### Công thức toán học
+Vector embedding sử dụng mô hình FastEmbed để chuyển đổi văn bản thành vector có kích thước cố định. Khi tìm kiếm, ChromaDB sử dụng Approximate Nearest Neighbors (ANN) với công thức:
+
+$ANN(q, D) = \arg\max_{d \in D} similarity(q, d)$
+
+Trong đó:
+- $q$ là vector truy vấn
+- $D$ là tập hợp các vector tài liệu
+- $similarity$ là hàm đo độ tương đồng (thường là cosine similarity)
+
+#### Triển khai trong dự án
+```python
+def store_documents(docs):
+    # Tạo ID tài liệu duy nhất
+    document_id = str(uuid.uuid4())
+    
+    # Phân đoạn tài liệu thành chunks
+    chunks = text_splitter.split_documents(docs)
+    
+    # Tạo ID duy nhất cho mỗi chunk
+    chunk_ids = [f"{document_id}_chunk_{i}" for i in range(len(chunks))]
+    
+    # Lưu vào ChromaDB
+    vector_store = Chroma.from_documents(
+        documents=chunks,
+        embedding=embedding,
+        persist_directory=DB_FOLDER,
+        ids=chunk_ids,
+    )
+    vector_store.persist()
+    
+    return document_id
+```
+
+#### Cải tiến với Dynamic-K
+Hệ thống sử dụng cơ chế Dynamic-K để điều chỉnh số lượng kết quả truy vấn dựa trên độ phức tạp của truy vấn, giúp cân bằng giữa chất lượng thông tin và hiệu suất xử lý.
+```python
+def get_dynamic_k(query: str, base_k: int = 3, words_per_increment: int = 10, max_increment: int = 3) -> int:
+    word_count = len(query.split())
+    increments = min(word_count // words_per_increment, max_increment)
+    return base_k + increments
+```
+### Retrieval Augmented Generation (RAG)
+
+RAG (Retrieval Augmented Generation) được triển khai để nâng cao chất lượng câu trả lời bằng cách kết hợp khả năng truy xuất thông tin từ tài liệu với khả năng sinh nội dung của mô hình ngôn ngữ lớn.
+
+#### Cơ chế hoạt động
+1. **Nhúng truy vấn**: Khi người dùng gửi truy vấn, hệ thống chuyển đổi câu hỏi thành vector nhúng (embedding)
+2. **Truy xuất ngữ cảnh**: Hệ thống tìm kiếm các tài liệu liên quan trong vector store
+3. **Bổ sung ngữ cảnh**: Thông tin được trích xuất được kết hợp với prompt gửi đến LLM
+4. **Sinh câu trả lời**: LLM tạo câu trả lời dựa trên cả truy vấn và ngữ cảnh đã truy xuất
+
+#### Công thức toán học
+RAG sử dụng độ tương đồng cosine để so sánh vector truy vấn với vector tài liệu:
+
+$similarity(q, d) = \frac{q \cdot d}{||q|| \times ||d||}$
+
+Trong đó:
+- $q$ là vector nhúng của truy vấn
+- $d$ là vector nhúng của tài liệu
+- $q \cdot d$ là tích vô hướng của hai vector
+- $||q||$ và $||d||$ là độ dài Euclidean của vector
+
+### Triển khai trong dự án
+```python
+def retrieve_relevant_documents(query, vector_store, base_k: int = 3) -> list:
+    @lru_cache(maxsize=128)
+    def _cached_retrieval(query_hash, base_k):
+        dynamic_k = get_dynamic_k(query, base_k=base_k)
+        docs_and_scores = vector_store.similarity_search_with_score(query, k=dynamic_k)
+        # Chuyển đổi kết quả thành định dạng phù hợp
+        # ...
+        return docs
+    
+    # Sử dụng caching để cải thiện hiệu suất
+    query_hash = hashlib.md5(query.encode()).hexdigest()
+    return _cached_retrieval(query_hash, base_k)
+```
+
 ### Đánh giá câu trả lời
 Hệ thống đánh giá tự động các khía cạnh của câu trả lời:
 - **Cấu trúc**: Kiểm tra các thẻ HTML cần thiết (`<CONCEPT>`, `<EXAMPLE>`, `<IMPLEMENTATION>`, v.v.)
@@ -106,6 +191,28 @@ Hệ thống tự động phát hiện và điều chỉnh nội dung dựa trê
 5. Đánh giá và định dạng câu trả lời
 6. Gửi kết quả về cho người dùng
 7. Lưu trữ hội thoại
+
+### Quy trình RAG chi tiết
+
+1. **Tiền xử lý tài liệu**:
+   - Phân tích tài liệu PDF
+   - Chia thành các đoạn nhỏ (chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
+   - Tạo vector nhúng cho mỗi đoạn với FastEmbedEmbeddings
+   - Lưu vào ChromaDB với metadata
+
+2. **Xử lý truy vấn**:
+   - Tạo vector nhúng từ truy vấn người dùng
+   - Tìm kiếm các đoạn tài liệu tương tự trong ChromaDB
+   - Kết hợp thông tin từ lịch sử hội thoại (nếu có)
+   - Xây dựng prompt với ngữ cảnh trích xuất
+   - Gửi đến LLM để tạo câu trả lời
+
+3. **Tối ưu hóa**:
+   - Cache kết quả truy vấn cho các truy vấn tương tự
+   - Điều chỉnh số lượng kết quả trả về dựa trên độ phức tạp của truy vấn
+   - Đánh giá và định dạng câu trả lời theo cấu trúc chuẩn
+
+Sự kết hợp của RAG và ChromaDB tạo nên một hệ thống hỏi đáp thông minh, có khả năng truy xuất thông tin từ tài liệu DSA và đưa ra câu trả lời có cấu trúc, đầy đủ thông tin một cách tự động.
 
 ## Phát triển và Mở rộng
 
