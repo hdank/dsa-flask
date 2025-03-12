@@ -327,7 +327,7 @@ Hệ thống đánh giá sự hiện diện và nội dung của các thẻ HTML
 - `<LAB>`: Phần thực hành (nếu có)
 
 Điểm số được tính như sau:
-- Thẻ có nội dung đầy đủ: +10-15 điểm
+- Thẻ có nội dung đầy đủ: +10->15 điểm
 - Thẻ tồn tại nhưng trống: +5 điểm
 - Thẻ bị thiếu hoặc lỗi: 0 điểm
 - Cấu trúc tổng thể: tối đa 100 điểm
