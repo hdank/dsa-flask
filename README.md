@@ -337,13 +337,19 @@ Hệ thống đánh giá sự hiện diện và nội dung của các thẻ HTML
 Đánh giá chất lượng của nội dung trong câu trả lời:
 
 **Chất lượng giải thích khái niệm** (30% trọng số): 
-`concept_quality = quality_of_explanation(concept_content)`
+```python
+concept_quality = quality_of_explanation(concept_content)
+```
 
 **Chất lượng ví dụ** (20% trọng số): 
-`example_quality = quality_of_example(example_content)`
+```python
+example_quality = quality_of_example(example_content)
+```
 
 **Chất lượng mã nguồn** (20% trọng số): 
-`comment_ratio = comment_lines / max(1, code_lines)`
+```python
+comment_ratio = comment_lines / max(1, code_lines)
+```
 
 **Phân tích độ phức tạp** (30% trọng số):
 - Phân tích đầy đủ độ phức tạp thuật toán: +25 điểm
@@ -358,36 +364,94 @@ Hệ thống đánh giá sự hiện diện và nội dung của các thẻ HTML
 Đánh giá mức độ phù hợp của câu trả lời với câu hỏi:
 
 **Tỷ lệ từ khóa chung** (40% trọng số):
-`keyword_ratio = len(common_keywords) / max(1, len(query_keywords)) keyword_score = min(100, keyword_ratio * 100)`
+```python
+keyword_ratio = len(common_keywords) / max(1, len(query_keywords)) keyword_score = min(100, keyword_ratio * 100)
+```
 
 **Tương đồng ngữ nghĩa** (40% trọng số):
-`semantic_score = cosine_similarity(query_embedding, response_embedding) * 100`
+```python
+semantic_score = cosine_similarity(query_embedding, response_embedding) * 100
+```
 
 **Nhận dạng chủ đề DSA** (10% trọng số):
-`topic_score = 100 if detected_dsa_topics else 0`
+```python
+topic_score = 100 if detected_dsa_topics else 0
+```
 
 **Kiểm tra định dạng phản hồi** (10% trọng số):
-`format_score = 100 if format_matches else 0`
+```pythonformat_score = 100 if format_matches else 0
+```
 
 ### Đo lường tương đồng văn bản
 Hệ thống sử dụng nhiều phương pháp khác nhau để đo lường độ tương đồng văn bản:
 
 1. **Tỷ lệ tương đồng chuỗi (SequenceMatcher)**:
-`string_similarity = SequenceMatcher(None, expected_output, completion).ratio() * 100`
+Phương pháp này so sánh trực tiếp các ký tự giữa hai chuỗi và trả về tỷ lệ khớp từ 0 đến 100%.
 
-2. **Tỷ lệ tương đồng từ**:
-`word_similarity = len(common_words) / max(len(expected_words), len(completion_words)) * 100`
+```python
+string_similarity = SequenceMatcher(None, expected_output, completion).ratio() * 100
+```
 
-3. **Tương đồng cosine**:
-`cosine_similarity = dot(vectorizer(expected_output), vectorizer(completion)) / (norm(vectorizer(expected_output)) * norm(vectorizer(completion))) * 100`
+2. **Tỷ lệ tương đồng từ (Jaccard Similarity)** :
+Tính tỷ lệ số từ chung giữa hai văn bản so với tổng số từ của văn bản dài hơn.
+
+```python
+word_similarity = len(common_words) / max(len(expected_words), len(completion_words)) * 100
+```
+Tương đồng Jaccard đo lường mức độ chồng lấp giữa hai tập hợp bằng cách tính tỷ lệ giữa giao điểm và hợp của hai tập. Công thức toán học:
+$$J(A, B) = \frac{|A \cap B|}{|A \cup B|}$$
 
 Trong đó:
-- Tương đồng cosine đo góc giữa hai vector văn bản trong không gian vector
-- Vector văn bản được tạo bằng FastEmbedEmbeddings
-- dot() là tích vô hướng của hai vector
-- norm() là độ dài euclidean của vector
 
-### Cải tiến đánh giá năng động
+* $A$ và $B$ là hai tập hợp từ (được trích xuất từ hai văn bản)
+* $|A \cap B|$ là số phần tử trong giao của hai tập (số từ chung)
+* $|A \cup B|$ là số phần tử trong hợp của hai tập (tổng số từ duy nhất)
+* Giá trị trả về nằm trong khoảng [0, 1], với 1 là hoàn toàn giống nhau và 0 là hoàn toàn khác nhau
+
+Ưu điểm của tương đồng Jaccard:
+
+* Đơn giản và hiệu quả để so sánh tập hợp
+* Phù hợp để đo lường sự chồng lấp của từ vựng
+* Không bị ảnh hưởng bởi sự lặp lại của các phần tử
+3. **Tương đồng cosine**:
+```python
+cosine_similarity = dot(vectorizer(expected_output), vectorizer(completion)) / (norm(vectorizer(expected_output)) * norm(vectorizer(completion))) * 100
+```
+
+Tương đồng cosine đo lường góc giữa hai vector trong không gian đa chiều, một phương pháp rất hiệu quả để so sánh ngữ nghĩa của văn bản. Công thức toán học:
+
+$$\text{cosine}(\vec{A}, \vec{B}) = \frac{\vec{A} \cdot \vec{B}}{||\vec{A}|| \times ||\vec{B}||} = \frac{\sum_{i=1}^{n} A_i B_i}{\sqrt{\sum_{i=1}^{n} A_i^2} \times \sqrt{\sum_{i=1}^{n} B_i^2}}$$
+
+Trong đó:
+
+* $\vec{A}$ và $\vec{B}$ là các vector nhúng đại diện cho hai đoạn văn bản
+* $\vec{A} \cdot \vec{B}$ là tích vô hướng (dot product) của hai vector
+* $||\vec{A}||$ và $||\vec{B}||$ là độ dài Euclidean của mỗi vector
+* Giá trị trả về nằm trong khoảng [-1, 1], với 1 là hoàn toàn giống nhau, 0 là không liên quan, và -1 là hoàn toàn trái ngược
+* Vector nhúng được tạo bằng FastEmbedEmbeddings, biến đổi văn bản thành vector 384 chiều
+
+Ưu điểm của tương đồng cosine:
+
+* Bỏ qua độ dài văn bản, chỉ tập trung vào hướng ngữ nghĩa
+* Hiệu quả đối với dữ liệu thưa (sparse data)
+* Phản ánh tốt mối quan hệ ngữ nghĩa giữa các văn bản
+
+### Kết hợp các phương pháp đo lường
+Hệ thống kết hợp các phương pháp đo lường trên để tạo ra một đánh giá toàn diện hơn về mức độ tương đồng giữa câu hỏi và câu trả lời:
+```python
+combined_similarity = (
+    0.4 * cosine_similarity + 
+    0.3 * jaccard_similarity + 
+    0.2 * word_similarity + 
+    0.1 * string_similarity
+)
+```
+Việc kết hợp nhiều phương pháp giúp:
+* Cân bằng giữa tương đồng cấu trúc và tương đồng ngữ nghĩa
+* Giảm thiểu sai số của từng phương pháp riêng lẻ
+* Cung cấp đánh giá chính xác hơn về mức độ liên quan giữa câu hỏi và câu trả lời
+
+### Cải tiến đánh giá 
 
 1. **Dynamic Evaluation Weight**
 
