@@ -2,6 +2,18 @@
 
 Ứng dụng trợ lý AI chuyên về Cấu trúc dữ liệu và Thuật toán (Data Structures and Algorithms), được xây dựng trên nền tảng Flask với khả năng truy vấn PDF và hình ảnh.
 
+## Table of Contents
+- [Setup](#setup)
+- [Kiến trúc hệ thống](#kiến-trúc-hệ-thống)
+- [Các chức năng chính](#các-chức-năng-chính)
+- [API và Endpoints](#api-và-endpoints)
+- [Các thành phần chính](#các-thành-phần-chính)
+- [Tính năng đặc biệt](#tính-năng-đặc-biệt)
+- [Quy trình xử lý truy vấn](#quy-trình-xử-lý-truy-vấn)
+- [Function Calling](#function-calling)
+- [Hệ thống Đánh giá Tự động](#hệ-thống-đánh-giá-tự-động)
+- [Phát triển và Mở rộng](#phát-triển-và-mở-rộng)
+
 ## Setup
 
 1.  **Install Python Dependencies:**
@@ -409,13 +421,14 @@ DSA_KEYWORDS = {
 
 3. **Xếp hạng chất lượng**
 Dựa trên điểm tổng hợp, hệ thống cung cấp xếp hạng từ A đến F:
+
 | Xếp hạng | Điểm số     |
-|----------|------------|
-| A        | ≥ 90 điểm  |
-| B        | ≥ 80 điểm  |
-| C        | ≥ 70 điểm  |
-| D        | ≥ 60 điểm  |
-| F        | < 60 điểm  |
+|----------|-------------|
+| A        | ≥ 90 điểm   |
+| B        | ≥ 80 điểm   |
+| C        | ≥ 70 điểm   |
+| D        | ≥ 60 điểm   |
+| F        | < 60 điểm   |
 
 ### Lưu trữ kết quả đánh giá
 Hệ thống lưu trữ kết quả đánh giá trong thư mục "evaluations" dưới định dạng JSON, cho phép:
