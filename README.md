@@ -143,7 +143,7 @@ Trong đó:
 - $q \cdot d$ là tích vô hướng của hai vector
 - $||q||$ và $||d||$ là độ dài Euclidean của vector
 
-### Triển khai trong dự án
+#### Triển khai trong dự án
 ```python
 def retrieve_relevant_documents(query, vector_store, base_k: int = 3) -> list:
     @lru_cache(maxsize=128)
@@ -213,6 +213,217 @@ Hệ thống tự động phát hiện và điều chỉnh nội dung dựa trê
    - Đánh giá và định dạng câu trả lời theo cấu trúc chuẩn
 
 Sự kết hợp của RAG và ChromaDB tạo nên một hệ thống hỏi đáp thông minh, có khả năng truy xuất thông tin từ tài liệu DSA và đưa ra câu trả lời có cấu trúc, đầy đủ thông tin một cách tự động.
+
+## Function Calling
+Hệ thống DSA Flask triển khai cơ chế Function Calling cho phép mô hình ngôn ngữ lớn tương tác với các công cụ bên ngoài, truy xuất thông tin, và thực hiện các tác vụ phức tạp.
+
+### Tổng quan
+Function Calling là một cơ chế giúp LLM xác định khi nào và cách thức gọi các hàm được định nghĩa trước. Cơ chế này cho phép mô hình mở rộng khả năng của mình bằng cách:
+
+- Tìm kiếm thông tin từ nguồn bên ngoài
+- Thực hiện các tính toán phức tạp
+- Tạo biểu diễn trực quan
+- Tương tác với các API và dịch vụ khác
+
+### Cấu trúc và Quy trình
+1. **Đăng ký hàm**: Các hàm được đăng ký trong module `function_call.py` để LLM có thể truy cập
+2. **Chuẩn bị định nghĩa**: Hệ thống tạo các định nghĩa hàm ở định dạng tương thích với API của LLM
+3. **Gửi yêu cầu**: Định nghĩa hàm và tin nhắn người dùng được gửi đến API
+4. **Phân tích phản hồi**: Nếu LLM quyết định gọi hàm, hệ thống xác định hàm cần gọi và tham số
+5. **Thực thi hàm**: Hệ thống gọi hàm tương ứng với các tham số được cung cấp
+6. **Phản hồi kết quả**: Kết quả của hàm được đưa vào tin nhắn và gửi lại cho API
+7. **Lặp lại hoặc kết thúc**: Quá trình được lặp lại nếu cần thiết hoặc kết thúc với phản hồi cuối cùng
+
+### Các hàm công cụ chính
+
+#### 1. `get_education_video`
+Tìm kiếm video giáo dục về các chủ đề DSA, hỗ trợ cả tiếng Việt và tiếng Anh (ưu tiên các video được hardcode):
+```python
+def get_educational_video(topic: str, max_results: int = 3) -> List[Dict[str, str]]:
+    """
+    Tìm kiếm video giáo dục về một chủ đề DSA cụ thể.
+    
+    Args:
+        topic: Chủ đề cần tìm video (ví dụ: "bubble sort", "sắp xếp nổi bọt")
+        max_results: Số lượng video tối đa cần trả về
+        
+    Returns:
+        List[Dict[str, str]]: Danh sách video với thông tin title, url, thumbnail_url, channel_name
+    """
+```
+
+#### 2. `_fetch_videos_from_api`
+Tìm kiếm video từ YouTube API nếu video hardcode không đáp ứng được yêu cầu câu hỏi người dùng
+```python
+def _fetch_videos_from_api(topic: str, max_results: int) -> List[Dict[str, str]]:
+    """
+    Fall back function to get videos from YouTube API if no recommended videos are found.
+    
+    Args:
+        topic (str): The topic to search for
+        max_results (int): Maximum number of results to return
+        
+    Returns:
+        List[Dict[str, str]]: List of video information dictionaries
+    """
+```
+
+### Chuyển đổi thuật ngữ DSA Tiếng Việt-Anh
+Hệ thống hỗ trợ chuyển đổi giữa thuật ngữ DSA tiếng Việt và tiếng Anh, giúp chức năng tìm kiếm video hoạt động hiệu quả với người dùng của cả hai ngôn ngữ. Bộ chuyển đổi thuật ngữ bao gồm:
+```python
+    language_mapping = {
+        "sắp xếp chọn": "selection sort",
+        "sắp xếp nhanh": "quick sort",
+        "sắp xếp nổi bọt": "bubble sort",
+        "sắp xếp chèn": "insertion sort",
+        "sắp xếp trộn": "merge sort",
+        "tìm kiếm tuyến tính": "linear search",
+        "tìm kiếm nhị phân": "binary search",
+        "danh sách liên kết đơn": "single linked list",
+        "danh sách liên kết kép": "double linked list",
+        "danh sách liên kết vòng": "circular linked list",
+        "ngăn xếp": "stack",
+        "hàng đợi": "queue",
+        "hàng đợi ưu tiên": "priority queue",
+        "bảng băm": "hash table",
+        "tìm kiếm theo chiều sâu": "depth first search",
+        "tìm kiếm theo chiều rộng": "breadth first search",
+        "cây nhị phân": "binary tree"
+    }
+```
+Điều này đảm bảo rằng người dùng có thể yêu cầu thông tin về các thuật toán và cấu trúc dữ liệu bằng thuật ngữ tiếng Việt, và hệ thống vẫn có thể tìm kiếm video giáo dục phù hợp.
+
+## Hệ thống Đánh giá Tự động
+DSA Flask tích hợp hệ thống đánh giá tự động để phân tích và đánh giá chất lượng câu trả lời, đảm bảo thông tin chính xác và hữu ích cho người dùng.
+
+### Các tiêu chí đánh giá
+Hệ thống đánh giá dựa trên 3 khía cạnh chính:
+
+1. **Cấu trúc** - Đánh giá tính đầy đủ và cấu trúc phù hợp của câu trả lời
+2. **Nội dung** - Đánh giá chất lượng nội dung thực tế
+3. **Độ liên quan** - Đánh giá mức độ phù hợp với câu hỏi
+
+### Thuật toán và công thức đánh giá
+#### 1. Đánh giá cấu trúc
+
+Hệ thống đánh giá sự hiện diện và nội dung của các thẻ HTML bắt buộc trong câu trả lời:
+
+- `<CONCEPT>`: Giải thích khái niệm
+- `<EXAMPLE>`: Ví dụ minh họa
+- `<IMPLEMENTATION>`: Triển khai mã nguồn
+- `<COMPLEXITY>`: Phân tích độ phức tạp
+- `<LAB>`: Phần thực hành (nếu có)
+
+Điểm số được tính như sau:
+- Thẻ có nội dung đầy đủ: +10-15 điểm
+- Thẻ tồn tại nhưng trống: +5 điểm
+- Thẻ bị thiếu hoặc lỗi: 0 điểm
+- Cấu trúc tổng thể: tối đa 100 điểm
+
+#### 2. Đánh giá nội dung
+
+Đánh giá chất lượng của nội dung trong câu trả lời:
+
+**Chất lượng giải thích khái niệm** (30% trọng số): 
+`concept_quality = quality_of_explanation(concept_content)`
+
+**Chất lượng ví dụ** (20% trọng số): 
+`example_quality = quality_of_example(example_content)`
+
+**Chất lượng mã nguồn** (20% trọng số): 
+`comment_ratio = comment_lines / max(1, code_lines)`
+
+**Phân tích độ phức tạp** (30% trọng số):
+- Phân tích đầy đủ độ phức tạp thuật toán: +25 điểm
+- Phân tích một phần: +15 điểm
+- Phân tích cơ bản: +5 điểm
+
+**Điều chỉnh theo độ dài**:
+- ≥500 từ: điểm * 1.1
+- <150 từ: điểm * 0.8
+
+#### 3. Đánh giá độ liên quan
+Đánh giá mức độ phù hợp của câu trả lời với câu hỏi:
+
+**Tỷ lệ từ khóa chung** (40% trọng số):
+`keyword_ratio = len(common_keywords) / max(1, len(query_keywords)) keyword_score = min(100, keyword_ratio * 100)`
+
+**Tương đồng ngữ nghĩa** (40% trọng số):
+`semantic_score = cosine_similarity(query_embedding, response_embedding) * 100`
+
+**Nhận dạng chủ đề DSA** (10% trọng số):
+`topic_score = 100 if detected_dsa_topics else 0`
+
+**Kiểm tra định dạng phản hồi** (10% trọng số):
+`format_score = 100 if format_matches else 0`
+
+### Đo lường tương đồng văn bản
+Hệ thống sử dụng nhiều phương pháp khác nhau để đo lường độ tương đồng văn bản:
+
+1. **Tỷ lệ tương đồng chuỗi (SequenceMatcher)**:
+`string_similarity = SequenceMatcher(None, expected_output, completion).ratio() * 100`
+
+2. **Tỷ lệ tương đồng từ**:
+`word_similarity = len(common_words) / max(len(expected_words), len(completion_words)) * 100`
+
+3. **Tương đồng cosine**:
+`cosine_similarity = dot(vectorizer(expected_output), vectorizer(completion)) / (norm(vectorizer(expected_output)) * norm(vectorizer(completion))) * 100`
+
+Trong đó:
+- Tương đồng cosine đo góc giữa hai vector văn bản trong không gian vector
+- Vector văn bản được tạo bằng FastEmbedEmbeddings
+- dot() là tích vô hướng của hai vector
+- norm() là độ dài euclidean của vector
+
+### Cải tiến đánh giá năng động
+
+1. **Dynamic Evaluation Weight**
+
+Hệ thống tự động điều chỉnh trọng số đánh giá dựa trên loại truy vấn:
+```python
+# Ví dụ cho truy vấn về cấu trúc dữ liệu
+{"structure": 0.5, "content": 0.3, "relevance": 0.2}
+
+# Ví dụ cho truy vấn về triển khai thuật toán
+{"structure": 0.2, "content": 0.5, "relevance": 0.3}
+```
+
+2. **Phát hiện chủ đề DSA**
+Hệ thống sử dụng từ điển chủ đề DSA để phát hiện nội dung câu hỏi và câu trả lời:
+```python
+DSA_KEYWORDS = {
+    "sort": ["sort", "sorting", "order", "arrange", "sequence", "sắp xếp", "xếp", "thứ tự"],
+    "search": ["search", "find", "locate", "query", "lookup", "tìm kiếm", "truy vấn", "tìm", "tra cứu"],
+    "tree": ["tree", "binary", "node", "leaf", "root", "branch", "cây", "nhị phân", "nút", "lá", "gốc", "nhánh"],
+    "graph": ["graph", "vertex", "edge", "node", "path", "network", "đồ thị", "đỉnh", "cạnh", "nút", "đường đi", "mạng"],
+    "hash": ["hash", "map", "key", "value", "collision", "bucket", "bảng băm", "khóa", "giá trị", "va chạm", "băm"],
+    "queue": ["queue", "enqueue", "dequeue", "fifo", "first in first out", "hàng đợi", "vào trước ra trước"],
+    "stack": ["stack", "push", "pop", "lifo", "last in first out", "ngăn xếp", "vào sau ra trước", "đẩy", "lấy"],
+    "linked_list": ["linked list", "node", "pointer", "next", "previous", "danh sách liên kết", "con trỏ", "kế tiếp", "trước đó"],
+    "array": ["array", "index", "element", "position", "contiguous", "mảng", "phần tử", "chỉ mục", "vị trí"],
+    "recursion": ["recursion", "recursive", "base case", "call stack", "đệ quy", "trường hợp cơ sở", "trường hợp cơ bản"],
+    "dynamic_programming": ["dynamic programming", "dp", "memoization", "subproblem", "quy hoạch động", "bài toán con", "ghi nhớ"],
+    "greedy": ["greedy", "optimal", "choice", "local optimum", "tham lam", "tối ưu cục bộ", "lựa chọn"]
+}
+```
+
+3. **Xếp hạng chất lượng**
+Dựa trên điểm tổng hợp, hệ thống cung cấp xếp hạng từ A đến F:
+| Xếp hạng | Điểm số     |
+|----------|------------|
+| A        | ≥ 90 điểm  |
+| B        | ≥ 80 điểm  |
+| C        | ≥ 70 điểm  |
+| D        | ≥ 60 điểm  |
+| F        | < 60 điểm  |
+
+### Lưu trữ kết quả đánh giá
+Hệ thống lưu trữ kết quả đánh giá trong thư mục "evaluations" dưới định dạng JSON, cho phép:
+* Phân tích xu hướng chất lượng câu trả lời theo thời gian
+* Xác định các lĩnh vực cần cải thiện
+* So sánh hiệu suất giữa các phiên bản của hệ thống
+
+Hệ thống đánh giá tự động này giúp DSA Flask không ngừng cải thiện chất lượng câu trả lời và đảm bảo thông tin chính xác, có cấu trúc rõ ràng và liên quan đến câu hỏi của người dùng.
 
 ## Phát triển và Mở rộng
 
