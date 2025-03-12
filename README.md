@@ -437,6 +437,7 @@ Trong đó:
 * Hiệu quả đối với dữ liệu thưa (sparse data)
 * Phản ánh tốt mối quan hệ ngữ nghĩa giữa các văn bản
 
+👉 **`Đây cũng là công thức tương tự được sử dụng trong hệ thống RAG`**
 ### Kết hợp các phương pháp đo lường
 Hệ thống kết hợp các phương pháp đo lường trên để tạo ra một đánh giá toàn diện hơn về mức độ tương đồng giữa câu hỏi và câu trả lời:
 ```python
