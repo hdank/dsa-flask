@@ -10,6 +10,7 @@
 - [Các thành phần chính](#các-thành-phần-chính)
 - [Tính năng đặc biệt](#tính-năng-đặc-biệt)
 - [Quy trình xử lý truy vấn](#quy-trình-xử-lý-truy-vấn)
+- [Tối ưu RAG cho Truy vấn Bài tập](#tối-ưu-rag-cho-truy-vấn-bài-tập)
 - [Function Calling](#function-calling)
 - [Hệ thống Đánh giá Tự động](#hệ-thống-đánh-giá-tự-động)
 - [Phát triển và Mở rộng](#phát-triển-và-mở-rộng)
