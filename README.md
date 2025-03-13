@@ -38,10 +38,13 @@ Dự án được tổ chức theo cấu trúc module như sau:
 ### Thư mục chính:
 - **app/**: Chứa mã nguồn chính của ứng dụng
   - **api/**: Các endpoint API
+  - **conversations/**: Xử lý và quản lý hội thoại
   - **core/**: Chức năng cốt lõi
+  - **db/**: Quản lý và tương tác với cơ sở dữ liệu
+  - **pdf/**: Xử lý tài liệu PDF
   - **service/**: Các dịch vụ trung gian
-- **conversations/**: Lưu trữ lịch sử hội thoại
-- **db/**: Cơ sở dữ liệu vector và metadata
+- **conversations/**: Lưu trữ lịch sử hội thoại dạng JSON
+- **db/**: Cơ sở dữ liệu vector (ChromaDB) và metadata
 - **evaluations/**: Kết quả đánh giá câu trả lời
 - **pdf/**: Tài liệu PDF được tải lên
 
@@ -225,6 +228,75 @@ Hệ thống tự động phát hiện và điều chỉnh nội dung dựa trê
    - Đánh giá và định dạng câu trả lời theo cấu trúc chuẩn
 
 Sự kết hợp của RAG và ChromaDB tạo nên một hệ thống hỏi đáp thông minh, có khả năng truy xuất thông tin từ tài liệu DSA và đưa ra câu trả lời có cấu trúc, đầy đủ thông tin một cách tự động.
+
+## Tối ưu RAG cho Truy vấn Bài tập
+
+Hệ thống đã được tối ưu đặc biệt để xử lý các truy vấn liên quan đến bài tập thông qua các kỹ thuật sau:
+
+### 1. Phát hiện truy vấn bài tập
+
+Hệ thống tự động nhận biết khi người dùng đang tìm kiếm nội dung bài tập thông qua các từ khóa như "bài tập", "lab", "exercise", "practice", "thực hành", "triển khai", "implementation", v.v.
+
+### 2. Tăng cường truy vấn (Query Boosting)
+
+Khi phát hiện truy vấn về bài tập, hệ thống tự động tăng cường truy vấn bằng cách:
+- Thêm các từ khóa liên quan đến bài tập vào truy vấn gốc
+- Áp dụng tăng cường đặc biệt cho các thuật toán cụ thể (như "linear search", "binary search", "bubble sort")
+- Tăng giá trị `k` để truy xuất nhiều kết quả liên quan hơn
+
+### 3. Maximum Marginal Relevance (MMR)
+
+Hệ thống sử dụng MMR để cân bằng giữa tính liên quan và tính đa dạng của kết quả, theo công thức:
+
+$$MMR = \arg\max_{d_i \in D \setminus S} \left[ \lambda \cdot sim_1(d_i, q) - (1-\lambda) \max_{d_j \in S} sim_2(d_i, d_j) \right]$$
+
+Trong đó:
+- $\lambda = 0.7$ để cân bằng giữa độ liên quan và đa dạng
+- $sim_1$ là độ tương đồng với truy vấn
+- $sim_2$ là độ tương đồng với các tài liệu đã chọn
+
+### 4. Lọc và Xếp hạng thông minh
+
+Kết quả được tăng cường với các kỹ thuật:
+- Boosting nội dung bài tập (giảm điểm số, tăng thứ hạng)
+- Filtering metadata để ưu tiên các trang có nội dung bài tập
+- Điều chỉnh điểm số dựa trên các từ khóa liên quan đến bài tập
+
+## Phân đoạn Tài liệu Thông minh
+
+Hệ thống sử dụng `RecursiveCharacterTextSplitter` với hai chiến lược khác nhau để xử lý nội dung:
+
+### 1. Phân đoạn nội dung thông thường
+
+```python
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=CHUNK_SIZE, 
+    chunk_overlap=CHUNK_OVERLAP,
+    length_function=len,
+    is_separator_regex=False
+)
+```
+### 2. Phân đoạn cho nội dung bài tập
+```python
+exercise_text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,          # Đoạn nhỏ hơn cho bài tập
+    chunk_overlap=150,       # Độ chồng lấp phù hợp
+    length_function=len,
+    separators=["\n\n", "\n", " ", ""]
+)
+```
+
+### 3. Quy trình phân đoạn đệ quy
+RecursiveCharacterTextSplitter hoạt động bằng cách:
+
+1. Thử phân tách văn bản theo các dấu phân cách mức cao (như "\n\n")
+2. Nếu đoạn kết quả vẫn lớn hơn kích thước mục tiêu, áp dụng dấu phân cách mức thấp hơn (như "\n")
+3. Tiếp tục đến khi văn bản được phân thành các đoạn có kích thước phù hợp
+### 4. Làm giàu Metadata
+Mỗi đoạn được làm giàu với metadata thông minh:
+* Gán loại nội dung ("exercise" hoặc thông thường)
+* Gán thẻ thuật toán cụ thể (như "linear_search", "binary_search")
+* Tạo ID đoạn và ID tài liệu duy nhất để quản lý hiệu quả
 
 ## Function Calling
 Hệ thống DSA Flask triển khai cơ chế Function Calling cho phép mô hình ngôn ngữ lớn tương tác với các công cụ bên ngoài, truy xuất thông tin, và thực hiện các tác vụ phức tạp.
@@ -507,3 +579,4 @@ Hệ thống đánh giá tự động này giúp DSA Flask không ngừng cải 
 ## Phát triển và Mở rộng
 
 Dự án được thiết kế theo cấu trúc module, cho phép dễ dàng mở rộng thêm các chức năng mới hoặc thay đổi các thành phần hiện có.
+

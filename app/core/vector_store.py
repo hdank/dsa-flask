@@ -243,11 +243,86 @@ def store_documents(docs):
             if is_exercise_doc:
                 chunk.metadata["content_type"] = "exercise"
                 # Add more specific tagging for algorithm types
-                if "linear search" in content_lower or "tìm kiếm tuyến tính" in content_lower:
+                
+                # Searching algorithms
+                if "linear search" in content_lower or "tìm kiếm tuyến tính" in content_lower or "tuần tự" in content_lower:
                     chunk.metadata["algorithm"] = "linear_search"
                 elif "binary search" in content_lower or "tìm kiếm nhị phân" in content_lower:
                     chunk.metadata["algorithm"] = "binary_search"
-                # Add more algorithm tags as needed
+                elif "hash search" in content_lower or "tìm kiếm băm" in content_lower:
+                    chunk.metadata["algorithm"] = "hash_search"
+                elif "interpolation search" in content_lower or "tìm kiếm nội suy" in content_lower:
+                    chunk.metadata["algorithm"] = "interpolation_search"
+                
+                # Sorting algorithms
+                elif "bubble sort" in content_lower or "sắp xếp nổi bọt" in content_lower:
+                    chunk.metadata["algorithm"] = "bubble_sort"
+                elif "selection sort" in content_lower or "sắp xếp chọn" in content_lower:
+                    chunk.metadata["algorithm"] = "selection_sort"
+                elif "insertion sort" in content_lower or "sắp xếp chèn" in content_lower:
+                    chunk.metadata["algorithm"] = "insertion_sort"
+                elif "merge sort" in content_lower or "sắp xếp trộn" in content_lower:
+                    chunk.metadata["algorithm"] = "merge_sort"
+                elif "quick sort" in content_lower or "sắp xếp nhanh" in content_lower:
+                    chunk.metadata["algorithm"] = "quick_sort"
+                elif "heap sort" in content_lower or "sắp xếp vun đống" in content_lower:
+                    chunk.metadata["algorithm"] = "heap_sort"
+                elif "counting sort" in content_lower or "sắp xếp đếm" in content_lower:
+                    chunk.metadata["algorithm"] = "counting_sort"
+                elif "radix sort" in content_lower or "sắp xếp cơ số" in content_lower:
+                    chunk.metadata["algorithm"] = "radix_sort"
+                
+                # Data structures
+                elif "array" in content_lower or "mảng" in content_lower:
+                    chunk.metadata["data_structure"] = "array"
+                elif "linked list" in content_lower or "danh sách liên kết" in content_lower:
+                    chunk.metadata["data_structure"] = "linked_list"
+                elif "stack" in content_lower or "ngăn xếp" in content_lower:
+                    chunk.metadata["data_structure"] = "stack"
+                elif "queue" in content_lower or "hàng đợi" in content_lower:
+                    chunk.metadata["data_structure"] = "queue"
+                elif "hash table" in content_lower or "bảng băm" in content_lower:
+                    chunk.metadata["data_structure"] = "hash_table"
+                elif "binary tree" in content_lower or "cây nhị phân" in content_lower:
+                    chunk.metadata["data_structure"] = "binary_tree"
+                elif "binary search tree" in content_lower or "cây nhị phân tìm kiếm" in content_lower:
+                    chunk.metadata["data_structure"] = "binary_search_tree"
+                elif "avl tree" in content_lower or "cây avl" in content_lower:
+                    chunk.metadata["data_structure"] = "avl_tree"
+                elif "heap" in content_lower or "đống" in content_lower:
+                    chunk.metadata["data_structure"] = "heap"
+                elif "graph" in content_lower or "đồ thị" in content_lower:
+                    chunk.metadata["data_structure"] = "graph"
+                
+                # Graph algorithms
+                elif "breadth first search" in content_lower or "bfs" in content_lower or "tìm kiếm theo chiều rộng" in content_lower:
+                    chunk.metadata["algorithm"] = "bfs"
+                elif "depth first search" in content_lower or "dfs" in content_lower or "tìm kiếm theo chiều sâu" in content_lower:
+                    chunk.metadata["algorithm"] = "dfs"
+                elif "dijkstra" in content_lower:
+                    chunk.metadata["algorithm"] = "dijkstra"
+                elif "bellman ford" in content_lower:
+                    chunk.metadata["algorithm"] = "bellman_ford"
+                elif "kruskal" in content_lower:
+                    chunk.metadata["algorithm"] = "kruskal"
+                elif "prim" in content_lower:
+                    chunk.metadata["algorithm"] = "prim"
+                elif "floyd warshall" in content_lower:
+                    chunk.metadata["algorithm"] = "floyd_warshall"
+                
+                # Dynamic programming
+                elif "dynamic programming" in content_lower or "quy hoạch động" in content_lower:
+                    chunk.metadata["algorithm"] = "dynamic_programming"
+                    
+                # Greedy algorithms
+                elif "greedy" in content_lower or "tham lam" in content_lower:
+                    chunk.metadata["algorithm"] = "greedy"
+                    
+                # Backtracking
+                elif "backtracking" in content_lower or "quay lui" in content_lower:
+                    chunk.metadata["algorithm"] = "backtracking"
+            else:
+                chunk.metadata["content_type"] = "theory"
                 
             chunks.append(chunk)
     
