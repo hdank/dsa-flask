@@ -3,7 +3,7 @@ import time
 import logging
 from app.core.llm import stream_llm_response
 from app.core.vector_store import retrieve_relevant_documents, get_vector_store
-from app.core.utils import manage_conversation, get_conversation_history, save_conversation
+from app.core.conversation import manage_conversation, get_conversation_history, save_conversation
 from app.core.config import SYSTEM_PROMPT
 
 # Configure logging
@@ -15,7 +15,6 @@ import time
 import logging
 from app.core.llm import stream_llm_response
 from app.core.vector_store import retrieve_relevant_documents, get_vector_store
-from app.core.utils import manage_conversation, get_conversation_history, save_conversation
 from app.core.config import SYSTEM_PROMPT
 
 # Configure logging

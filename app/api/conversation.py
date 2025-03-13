@@ -1,5 +1,5 @@
 from flask import jsonify, request
-from app.core.utils import manage_conversation, get_conversation_history, delete_conversation, save_conversation
+from app.core.conversation import manage_conversation, get_conversation_history, delete_conversation, save_conversation
 
 def start_new_conversation():
     conversation_id = manage_conversation(None)  # Force new conversation

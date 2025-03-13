@@ -1,6 +1,6 @@
 import logging, time, json, traceback, threading
 from flask import Response
-from app.core.utils import async_save_conversation, manage_conversation, cleanup_old_conversations, get_conversation_history, run_async, save_conversation
+from app.core.conversation import async_save_conversation, manage_conversation, cleanup_old_conversations, get_conversation_history, run_async, save_conversation
 from app.core.naming import generate_conversation_name
 from app.api.chat import rag_streaming_response
 from app.core.vector_store import get_vector_store, retrieve_relevant_documents

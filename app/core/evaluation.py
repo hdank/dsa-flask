@@ -24,9 +24,10 @@ EXPECTED_TAGS = {
     "example": ["<EXAMPLE>", "</EXAMPLE>"],
     "visualization": ["<VISUALIZATION>", "</VISUALIZATION>"],
     "implementation": ["<IMPLEMENTATION>", "</IMPLEMENTATION>"],
-    "explanation": ["<EXPLAINATION>", "</EXPLAINATION>"],
+    "explanation": ["<EXPLAINATION>", "</EXPLAINATION>"], 
     "complexity": ["<COMPLEXITY>", "</COMPLEXITY>"],
-    "videos": ["<VIDEOS>", "</VIDEOS>"]
+    "videos": ["<VIDEOS>", "</VIDEOS>"],
+    "lab": ["<LAB>", "</LAB>"] 
 }
 
 # Keywords for different DSA topics to check relevance
@@ -362,6 +363,27 @@ def evaluate_structure(response: str) -> Dict:
         else:
             results["findings"].append(f"{tag_type.capitalize()} tags missing completely")
     
+    lab_open_tag, lab_close_tag = EXPECTED_TAGS["lab"]
+    lab_open_pos = response.find(lab_open_tag)
+    lab_close_pos = response.find(lab_close_tag)
+    
+    if lab_open_pos >= 0 and lab_close_pos >= 0:
+        if lab_open_pos < lab_close_pos:
+            # LAB tags exist and are properly nested
+            lab_content = response[lab_open_pos + len(lab_open_tag):lab_close_pos].strip()
+            if lab_content:
+                results["findings"].append("Lab tag present with homework content")
+                tag_score = min(100, tag_score * 1.1)  # Give a small bonus for including homework
+            else:
+                results["findings"].append("Lab tag present but empty")
+        else:
+            results["findings"].append("Lab tags present but improperly nested")
+    elif lab_open_pos >= 0:
+        results["findings"].append("Lab has opening tag but missing closing tag")
+    elif lab_close_pos >= 0:
+        results["findings"].append("Lab has closing tag but missing opening tag")
+    # No need to report missing LAB tags as they are optional
+
     # Special checks for implementation responses
     if is_concept is False:  # Implementation response
         implementation_content = extract_tag_content(response, "IMPLEMENTATION")
@@ -611,6 +633,43 @@ def evaluate_content(response: str) -> Dict:
         else:
             # For any unmatched findings, create a generic Vietnamese translation
             findings_vi.append(f"Phát hiện: {finding}")
+    # Extract lab content
+    lab_content = extract_tag_content(response, "LAB")
+    
+    # Add evaluation for LAB content if present
+    if lab_content:
+        # Check lab quality based on length and structure
+        lab_quality = EvaluationMetrics.quality_of_explanation(lab_content)
+        
+        # Check if it contains actual exercises/tasks
+        has_exercises = any(kw in lab_content.lower() for kw in 
+                         ["exercise", "task", "implement", "write", "create", "practice",
+                          "bài tập", "thực hành", "triển khai", "viết", "tạo", "thực hiện"])
+        
+        if has_exercises:
+            results["findings"].append(f"Lab content contains clear exercises: {lab_quality}%")
+            content_score = min(100, content_score * 1.05)  # Small bonus for good homework
+        else:
+            results["findings"].append("Lab content present but lacks clear exercises")
+    
+    # In evaluate_structure, add to the findings_vi section:
+    elif "Lab tag present with homework content" in finding:
+        findings_vi.append("Thẻ Lab có nội dung bài tập")
+    elif "Lab tag present but empty" in finding:
+        findings_vi.append("Thẻ Lab hiện diện nhưng trống")
+    elif "Lab tags present but improperly nested" in finding:
+        findings_vi.append("Thẻ Lab hiện diện nhưng lồng không đúng")
+    elif "Lab has opening tag but missing closing tag" in finding:
+        findings_vi.append("Thẻ Lab có mở nhưng thiếu đóng")
+    elif "Lab has closing tag but missing opening tag" in finding:
+        findings_vi.append("Thẻ Lab có đóng nhưng thiếu mở")
+
+    # In evaluate_content, add to the findings_vi section:
+    elif "Lab content contains clear exercises" in finding:
+        quality = finding.split(": ")[1]
+        findings_vi.append(f"Nội dung bài tập Lab rõ ràng: {quality}")
+    elif "Lab content present but lacks clear exercises" in finding:
+        findings_vi.append("Nội dung Lab hiện diện nhưng thiếu bài tập rõ ràng")
     
     results["findings_vi"] = findings_vi
     

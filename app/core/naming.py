@@ -92,26 +92,73 @@ def generate_conversation_name(conversation_history: List[dict], query: str) -> 
     # Prepare a generative prompt including the query and the extracted topics.
     try:
         if language == "vi":
-            prompt = f"Tạo tiêu đề ngắn gọn cho cuộc trò chuyện về: \"{query}\""
+            prompt = f"Tạo tiêu đề ngắn gọn (không quá 10 từ) cho cuộc trò chuyện về: \"{query}\". Trả về CHÍNH XÁC tiêu đề, không có giải thích, không có dấu ngoặc kép."
         else:
-            prompt = f"Create a short title for a conversation about: \"{query}\""
+            prompt = f"Create a short title (no more than 10 words) for a conversation about: \"{query}\". Return ONLY the title, no explanation, no quotes."
                 
-        # Call LLM only once
-        conversation_name = generate_text_from_llm(prompt)
+        # Call LLM with retry
+        max_retries = 2
+        for i in range(max_retries):
+            try:
+                conversation_name = generate_text_from_llm(prompt)
+                # Verify response quality
+                if conversation_name and len(conversation_name) > 5 and len(conversation_name) < 100:
+                    # Clean up formatting
+                    conversation_name = conversation_name.strip('"\'').strip()
+                    break
+            except Exception as inner_e:
+                logging.warning(f"Retry {i+1}/{max_retries} for LLM title generation: {str(inner_e)}")
+                time.sleep(1)  # Brief delay before retry
+                
     except Exception as e:
         logging.error(f"Error using LLM for conversation name: {str(e)}")
     
     # Create topic-based titles if LLM fails
-    if not conversation_name:
+    if not conversation_name or conversation_name == "":
         # Check for common data structure/algorithm terms
         topic_mapping = {
+            # Basic Data Structures
             'stack': 'Cấu trúc dữ liệu Stack' if language == 'vi' else 'Stack Data Structure',
             'queue': 'Cấu trúc dữ liệu Queue' if language == 'vi' else 'Queue Data Structure',
             'linked list': 'Cấu trúc dữ liệu Linked List' if language == 'vi' else 'Linked List Data Structure',
+            'array': 'Mảng' if language == 'vi' else 'Array Data Structure',
+            'hash table': 'Bảng băm' if language == 'vi' else 'Hash Table Data Structure',
+            'hash map': 'Bảng băm' if language == 'vi' else 'Hash Map Data Structure',
+            
+            # Trees
             'binary tree': 'Cấu trúc dữ liệu Binary Tree' if language == 'vi' else 'Binary Tree Data Structure',
+            'binary search tree': 'Cây nhị phân tìm kiếm' if language == 'vi' else 'Binary Search Tree',
+            'avl tree': 'Cây AVL' if language == 'vi' else 'AVL Tree',
+            'b-tree': 'Cây B' if language == 'vi' else 'B-Tree',
+            'heap': 'Cấu trúc Heap' if language == 'vi' else 'Heap Data Structure',
+            
+            # Graphs
+            'graph': 'Đồ thị' if language == 'vi' else 'Graph Data Structure',
+            'directed graph': 'Đồ thị có hướng' if language == 'vi' else 'Directed Graph',
+            'undirected graph': 'Đồ thị vô hướng' if language == 'vi' else 'Undirected Graph',
+            
+            # Sorting Algorithms
             'quick sort': 'Thuật toán Quick Sort' if language == 'vi' else 'Quick Sort Algorithm',
             'merge sort': 'Thuật toán Merge Sort' if language == 'vi' else 'Merge Sort Algorithm',
             'bubble sort': 'Thuật toán Bubble Sort' if language == 'vi' else 'Bubble Sort Algorithm',
+            'insertion sort': 'Thuật toán Insertion Sort' if language == 'vi' else 'Insertion Sort Algorithm',
+            'selection sort': 'Thuật toán Selection Sort' if language == 'vi' else 'Selection Sort Algorithm',
+            'heap sort': 'Thuật toán Heap Sort' if language == 'vi' else 'Heap Sort Algorithm',
+            'radix sort': 'Thuật toán Radix Sort' if language == 'vi' else 'Radix Sort Algorithm',
+            
+            # Searching Algorithms
+            'binary search': 'Thuật toán Tìm kiếm Nhị phân' if language == 'vi' else 'Binary Search Algorithm',
+            'linear search': 'Thuật toán Tìm kiếm Tuyến tính' if language == 'vi' else 'Linear Search Algorithm',
+            'depth first search': 'Tìm kiếm theo chiều sâu' if language == 'vi' else 'Depth-First Search',
+            'breadth first search': 'Tìm kiếm theo chiều rộng' if language == 'vi' else 'Breadth-First Search',
+            
+            # Advanced Algorithms
+            'dynamic programming': 'Quy hoạch động' if language == 'vi' else 'Dynamic Programming',
+            'greedy algorithm': 'Thuật toán tham lam' if language == 'vi' else 'Greedy Algorithm',
+            'backtracking': 'Thuật toán quay lui' if language == 'vi' else 'Backtracking Algorithm',
+            'divide and conquer': 'Chia để trị' if language == 'vi' else 'Divide and Conquer',
+            'dijkstra': 'Thuật toán Dijkstra' if language == 'vi' else 'Dijkstra\'s Algorithm',
+            'a* algorithm': 'Thuật toán A*' if language == 'vi' else 'A* Search Algorithm',
         }
         
         for key, title in topic_mapping.items():

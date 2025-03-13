@@ -1,5 +1,5 @@
 from flask import jsonify
-from app.core.utils import get_conversation_history, list_conversations
+from app.core.conversation import get_conversation_history, list_conversations
 
 def get_eval_stats():
     """API endpoint to get evaluation statistics across all conversations"""
